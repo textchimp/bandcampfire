@@ -18,10 +18,14 @@ header, footer {
 
 footer {
   bottom: 0;
+  height: fit-content;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 header h3 {
   display: inline-block;
+  width: 89%;
 }
 
 header img {
@@ -39,6 +43,11 @@ header .playing > span {
   opacity: 0.5;
 }
 
+#savedArtists {
+  height: fit-content;
+  /* padding: 0 1rem !important; */
+}
+
 #savedArtists span {
   color: grey;
 }
@@ -47,6 +56,10 @@ header .playing > span {
   display: inline-block;
   padding-left: 0.5rem;
   height: 1rem;
+  margin: 0;
+
+  color: gray;
+  font-size: 11pt;
 }
 
 #savedArtists li{
@@ -66,9 +79,9 @@ header .playing > span {
 }
 
 #savedArtists li+li::before {
-  content: ", ";
+  content: ",";
   color: grey;
-  padding-right: 0.3rem;
+  padding-right: 0.2rem;
   /* padding: 0 0.5rem; */
 }
 
@@ -104,6 +117,7 @@ audio {
 /* single container for all */
 #players {
   padding-top: 5rem;
+  padding-bottom: 3rem;
   /* padding-left: 1rem; */
 }
 
@@ -137,6 +151,7 @@ audio {
   font-weight: bold;
   font-size: 14pt;
   min-width: 100px;
+  cursor: pointer;
   /* width: 20%; */
 }
 

@@ -1,6 +1,11 @@
+/*
+  TODO:
+  - toggle random/sequence play mode
+  - toggle for 'play only expanded' vs 'all'
+  - 'Loading...' for root/home
+
 // https://essential-audio-player.net/
-
-
+*/
 const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
@@ -17,7 +22,7 @@ let baseElement = null;
 let currentlyPlayingNode = null;
 let lastPlayingNode = null;
 
-const savedArtists = loadSavedArtists();
+let savedArtists = loadSavedArtists();
 console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
 
 
@@ -313,6 +318,7 @@ function initHandlers() {
   document.addEventListener('keydown', e => {
     console.log(`key`, e.code);
     if (e.code === 'Space') {
+      e.preventDefault();
       if (currentlyPlayingNode) {
         currentlyPlayingNode.pause();
         lastPlayingNode = currentlyPlayingNode;
@@ -329,7 +335,6 @@ function initHandlers() {
         rand.play();
         currentlyPlayingNode = rand;
       }
-      e.preventDefault();
     } else if (e.code === 'ArrowRight') {
       console.log(`Right`);
       e.preventDefault();
@@ -337,6 +342,9 @@ function initHandlers() {
       userAdvanceTrack();
     } else if (e.code == 'Period') {
       advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
+    } else if (e.code == 'Slash') {
+      // console.log( `Jump 33% current track` );
+      currentlyPlayingNode.currentTime += (currentlyPlayingNode.duration / 4.0);
     } else if (e.code == 'KeyS') {
       console.log( `SAVE CURRENT!`, currentlyPlayingNode.dataset );
       if (currentlyPlayingNode ){
@@ -376,14 +384,16 @@ async function init() {
 
 function renderSavedArtists( artists, parent='#savedArtists'){
    // TODO: display in order-added
+    if(Object.keys(artists).length === 0 ){
+      return;
+    }
+
    const list = document.createElement('ul');
    for( const key in artists ){
     console.log( `key`, key );
-     list.innerHTML += `
-      <li>
+     list.innerHTML += `<li>
         <a href="?url=${ artists[key] }">${ key }</a>
-      </li>
-     `;  
+      </li>`;  
    }
    $(parent).querySelector('ul').replaceWith(list);
 } // renderSavedArtists()
@@ -403,6 +413,7 @@ function loadBodyFromCache(url){
 
 function loadSavedArtists(){
   try {
+    // return {};
     return JSON.parse(localStorage.getItem('saved'));
   } catch( err ){
     console.warn( `Could not load saved artists`, err );
@@ -418,6 +429,8 @@ function saveArtist( obj ) {
     const saved = savedJSON ? JSON.parse(savedJSON) : {};
     saved[ obj.artist ] = obj.url;
     localStorage.setItem('saved', JSON.stringify(saved));
+    savedArtists = saved;
+    renderSavedArtists(savedArtists);
   } catch( err ){ 
     console.log( `Could not save band to faves:`, obj, err );
   }
