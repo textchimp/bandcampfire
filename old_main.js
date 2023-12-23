@@ -8,7 +8,7 @@ const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/he
 const cors = 'https://corsproxy.io/?';
 
 // helpers
-// Object.prototype.l = function (x) {console.log('log:', this); return this; };
+Object.prototype.l = function (x) {console.log('log:', this); return this; };
 const l = console.log;
 const $ = document.querySelector.bind(document);
 const $$ = document.querySelectorAll.bind(document);
@@ -17,43 +17,28 @@ let baseElement = null;
 let currentlyPlayingNode = null;
 let lastPlayingNode = null;
 
-const savedArtists = loadSavedArtists();
-console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
-
-
-function trunc(str, len=25){
-  return str.length < len ? str : str.substring(0, len) + '…';  
-}
-
-function audioPauseHandler(e){
-  console.log(`audioPauseHandler()`);
-  e.target.closest('.player').classList.remove('playing');
-  $('header img').style.display = 'none';
+function trunc(str, len){
+  return str.length < 26 ? str : str.substring(0, 26) + '…';  
 }
 
  function audioPlayHandler({target}) {
-  console.log( `audioPlayHandler()` );
-  currentlyPlayingNode = target;
-  $$('audio').forEach(el => el !== target && el.pause());
-  console.log( `new play level:`, target.dataset.nestingLevel );
+    currentlyPlayingNode = target;
+    $$('audio').forEach(el => el !== target && el.pause());
+    console.log( `new play level:`, target.dataset.nestingLevel );
 
-  // TODO: Remove deeper levels breadcrumb  when newest playing is from a higher level
-  let playTitleNode = document.querySelector(`#mainTitle .playing[data-nesting-level="${target.dataset.nestingLevel}"]`);
-  if( !playTitleNode ){
-    playTitleNode = document.createElement('span');
-    playTitleNode.className = 'playing';
-    playTitleNode.dataset.nestingLevel = target.dataset.nestingLevel;
-    document.querySelector('#mainTitle').appendChild(playTitleNode);
-  } 
-  playTitleNode.innerHTML = `<span>&gt;</span>${target.dataset.artist}`;   
+    // TODO: Remove deeper levels breadcrumb  when newest playing is from a higher level
+    let playTitleNode = document.querySelector(`#mainTitle .playing[data-nesting-level="${target.dataset.nestingLevel}"]`);
+    if( !playTitleNode ){
+      playTitleNode = document.createElement('span');
+      playTitleNode.className = 'playing';
+      playTitleNode.dataset.nestingLevel = target.dataset.nestingLevel;
+      document.querySelector('#mainTitle').appendChild(playTitleNode);
+    } 
+    playTitleNode.innerHTML = ` <span style="opacity: 0.5">&gt;</span> ${target.dataset.artist}`;   
 
-  target.closest('.player').classList.add('playing');
+    target.closest('.player').classList.add('playing');
 
-  const headerImg = $('header img');
-  console.log( `playing node:`, currentlyPlayingNode );
-  headerImg.src = currentlyPlayingNode.dataset.image;
-  headerImg.style.display = 'inline';
-} //audioPlayHandler()
+}
 
 function advanceTrack(ev, randomOrder=true){
   // actually 'ended' event handler
@@ -133,22 +118,18 @@ async function loadRecPlayers(url, parent) {
   } else {
     // nested
     parent.firstElementChild.remove(); // loading message
-    // parent.style.display = 'block'; // unhide
     console.log( `parent`, parent );
 
     const tags = document.createElement('div');
     tags.className = 'tags';
-    const tagsTextStr = tagsText.join(', ');
-    tags.innerHTML = trunc(tagsTextStr, 50);
-    if( tagsTextStr.length >= 50 ){
-      tags.title = tagsTextStr;
-    }
+    tags.innerHTML = tagsText.join(', ');
     parent.appendChild(tags);
     nestingLevel = parseInt(parent.dataset.nestingLevel); 
   }
 
   let playersNode = document.createElement('div');
-  playersNode.className = 'players';
+  playersNode.className = 'players'
+  // if(isBase) playersNode.style.marginTop = '3rem';
   playersNode.innerHTML += recs.map( r => recPlayerTemplate(r, nestingLevel) ).join('');
   parent.appendChild(playersNode);
 
@@ -201,47 +182,34 @@ function localStore(url, data) {
 }
 
 function recPlayerTemplate(match, level) {
-
   return `
-  <div class="playerWrapper">
-  
-    <div class="thumb">
-      <img src="${match.img}">
-    </div>
-
-    <div class="player">
-      <label class="artist">${trunc(match.artist)}</label>
-      <audio controls 
-        data-url="${match.albumUrl}" 
-        data-artist="${match.artist}"
-        data-image="${match.img}" 
-        data-nesting-level="${level}"
-      >
-        <source src=${match.audio.split('mp3-128&quot;:')[1].split('&quot;')[1]}>
-      </audio>
-    </div>
-    
-    <div class="follow">
-      <span class="opener">⤵︎</span>
-    </div>
-    
-    <div class="children"
-      data-url="${match.albumUrl}" 
-      data-loaded="false"
-      data-nesting-level="${level + 1}"
-    >
-        <div class="loading">Loading...</div>
-    </div>
-
-  </div><!-- playerWrapper --> 
-  `;
+      <img class="thumb" src="${match.img}">
+      <span class="player">
+        <label class="artist" title="${ match.artist.length >= 26 ? match.artist : '' }">
+          ${trunc(match.artist)}
+        </label>
+        <audio controls data-url="${match.albumUrl}" data-artist="${match.artist}" data-nesting-level="${level}">
+          <source src=${match.audio.split('mp3-128&quot;:')[1].split('&quot;')[1]}>
+        </audio>
+      </span>
+      <details class="children">
+        <summary>
+          <span data-loaded="false" data-url="${match.albumUrl}" class="open" style="font-size: 24pt; cursor: pointer">⤵︎</span>
+        </summary>
+        <div class="main" data-nesting-level="${level+1}">
+          <div class="loading">Loading...</div>
+        </div>
+      </details>
+    `;
 }
 
 function attachAudioHandlers(to){
   to.querySelectorAll('audio').forEach(a => {
     a.addEventListener('play', audioPlayHandler);
     a.addEventListener('ended', advanceTrack);
-    a.addEventListener('pause', audioPauseHandler);
+    a.addEventListener('pause', e => {
+      e.target.closest('.player').classList.remove('playing');
+    });
   }); // each audio
 } // attachAudioHandlers()
 
@@ -253,59 +221,40 @@ function initHandlers() {
 
   document.addEventListener('click', e => {
     const {target} = e;
-    
-    // Click thumbnail or band name to toggle play
-    if( target.parentNode.className === 'thumb'){
-      return playOrOpen(e, target.parentNode.parentNode.querySelector('audio') );
+    if( target.className === 'thumb'){
+      return playOrOpen(e, target.nextElementSibling.children[1]);
     } 
     if( target.className === 'artist' ){
       return playOrOpen(e, target.nextElementSibling);
     } 
     
-
-    // Open button for following rec band (nesting)
-    if (target.className === 'opener') {
-      const childrenNode = target.parentNode.nextElementSibling;
-      if (!childrenNode.classList.contains('opened') ){
-
+    if (target.className === 'open') {
+      if (target.dataset.loaded === 'false') {
+        target.dataset.loaded = 'true';
         target.innerHTML = '⤴︎';
         target.style.writingMode = 'sideways-lr';
-        target.style.color = 'lightblue';
-        console.log(`CLICK`, target, 'children:', childrenNode);
-        childrenNode.classList.add('opened');
-
-        console.log(`LOADED:`, childrenNode.dataset.loaded );
-        if (childrenNode.dataset.loaded === 'false') {
-          // Only load once
-          loadRecPlayers(childrenNode.dataset.url, childrenNode);
-          childrenNode.dataset.loaded = 'true'; // TODO: neater?
-        }
-      
+        console.log(`CLICK`, target.closest('.children'));
+        target.closest('.children').classList.add('open');
+        loadRecPlayers(target.dataset.url, target.parentNode.nextElementSibling);
       } else {
         // collapse
         target.innerHTML = '⤵︎';
-        target.style.writingMode = '';
-        target.dataset.loaded = 'false';
-        childrenNode.classList.remove('opened');
-        // childrenNode.style.display = 'none'; // hide
+        target.style.writingMode = 'none';
       }
-    } // child open/follow click
+    }
 
   }); // click
 
-  // shift+Hover thumbnail to zoom?
   document.addEventListener('mousemove', e => {
-    if( e.target.parentNode.className === 'thumb' && e.shiftKey ){
+    if (e.target.className === 'thumb' && e.shiftKey) {
       e.target.style.width = '40vw';
-      e.target.style.height = '40vw';
       e.target.style.position = 'absolute';
     }
   });
   document.addEventListener('mouseout', e => {
     // console.log(`me`, e.shiftKey);
-    if( e.target.parentNode.className === 'thumb' ){
+    if (e.target.className === 'thumb') {
       e.target.style.width = '50px';
-      e.target.style.height = '50px';
       e.target.style.position = 'static';
     }
   });
@@ -338,28 +287,15 @@ function initHandlers() {
     } else if (e.code == 'Period') {
       advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
     } else if (e.code == 'KeyS') {
-      console.log( `SAVE CURRENT!`, currentlyPlayingNode.dataset );
-      if (currentlyPlayingNode ){
-        saveArtist( currentlyPlayingNode.dataset );
-      }
-
+      console.log( `SAVE CURRENT!` );
       e.preventDefault();
     }
   });
-
 
   navigator.mediaSession.setActionHandler('nexttrack', function (ev) {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log(`MEDIA NEXT`, ev);
     userAdvanceTrack();
-  });
-
-  window.addEventListener("paste", (event) => {
-    event.preventDefault();
-    const pasted = (event.clipboardData || window.clipboardData).getData("text");
-    if(pasted.startsWith('http') && pasted.includes('bandcamp.com')){
-      window.location = `?url=${pasted}`;
-    }
   });
 
 } // initHandlers()
@@ -368,25 +304,10 @@ function initHandlers() {
 
 async function init() {
   // if( !loadBodyFromCache(startUrl) ){
-    await loadRecPlayers(startUrl, document.querySelector('#players'));
+    await loadRecPlayers(startUrl, document.body);
   // }
   initHandlers();
-  renderSavedArtists(savedArtists);
 };
-
-function renderSavedArtists( artists, parent='#savedArtists'){
-   // TODO: display in order-added
-   const list = document.createElement('ul');
-   for( const key in artists ){
-    console.log( `key`, key );
-     list.innerHTML += `
-      <li>
-        <a href="?url=${ artists[key] }">${ key }</a>
-      </li>
-     `;  
-   }
-   $(parent).querySelector('ul').replaceWith(list);
-} // renderSavedArtists()
 
 function loadBodyFromCache(url){
   try {
@@ -399,30 +320,5 @@ function loadBodyFromCache(url){
     console.log( `Could not load body from cache`, err );
   }
 } // loadBodyFromCache()
-
-
-function loadSavedArtists(){
-  try {
-    return JSON.parse(localStorage.getItem('saved'));
-  } catch( err ){
-    console.warn( `Could not load saved artists`, err );
-    return {};
-  }
-} // loadSavedArtists()
-
-function saveArtist( obj ) {
-  console.assert( 'artist' in obj, 'saveBand:: artist key missing');
-  console.assert( 'url' in obj, 'saveBand:: url key missing');
-  try {
-    const savedJSON = localStorage.getItem('saved');
-    const saved = savedJSON ? JSON.parse(savedJSON) : {};
-    saved[ obj.artist ] = obj.url;
-    localStorage.setItem('saved', JSON.stringify(saved));
-  } catch( err ){ 
-    console.log( `Could not save band to faves:`, obj, err );
-  }
-  // TODO: re-render
-  // savedBands = saved;
-} // saveBand()
 
 init();

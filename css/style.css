@@ -1,98 +1,174 @@
-    body {
-      font-family: Avenir, sans-serif;
-      padding: 0;
-      margin: 0;
-    }
+body {
+  font-family: Avenir, sans-serif;
+  padding: 0;
+  margin: 0;
+  background-color: black;
+  color: rgba(240, 240, 240, 1);
+  height: 100%;
+}
 
-    header {
-      position: fixed;
-      background-color: rgba(0,0,0,1);
-      padding-left: 1rem;
-      width: 100vw;
-      margin: 0;
-      z-index: 1;
-    }
+header, footer {
+  position: fixed;
+  background-color: rgba(20,20,20,1);
+  padding-left: 1rem;
+  width: 100vw;
+  margin: 0;
+  z-index: 1;
+}
 
-    .players {
-      display: grid;
-      grid-template-columns: 1fr 4fr 1fr;
-      /* width: 27vw; ll*/
-      width: 30%;
-      row-gap: 1em;
-      min-width: 380px;
-      padding-left: 1rem;
-      padding-top: 5em; 
-    }
+footer {
+  bottom: 0;
+}
 
-    .players .players {
-      padding-top: 0;
-    }
+header h3 {
+  display: inline-block;
+}
 
-    /* .players:nth-of-type(1){
-    
-      border: 1px solid red;
-      margin-top: 5rem;
-    } */
+header img {
+  display: none;
+  position: absolute;
+  right: 1rem;
+  width: 50px;
+  height: 50px;
+  margin: 0.5rem;
+}
 
-    .players>* {
-      /* border: 1px solid grey; */
-    }
+header .playing > span {
+  font-weight: normal;
+  padding: 0 0.6rem;
+  opacity: 0.5;
+}
 
-    .artist {
-      font-weight: bold;
-      font-size: 14pt;
-      min-width: 100px;
-      /* width: 20%; */
-    }
+#savedArtists span {
+  color: grey;
+}
 
-    .players img {
-      width: 50px;
-      cursor: pointer;
-      margin-right: 0.5rem;
-      animation: 1s linear 1s linear;
-    }
+#savedArtists ul {
+  display: inline-block;
+  padding-left: 0.5rem;
+  height: 1rem;
+}
 
-    .players span {
-      /* width: 70%; */
-    }
+#savedArtists li{
+  display: inline-block;
+  list-style-type: none;
+  /* padding-left: 1rem; */
+}
 
-    audio {
-      /* width: 139%; ll*/
-      max-width: 260px;
-      /*ll*/
-      height: 24px;
-      display: block;
-      overflow: hidden;
-      border-top-right-radius: 0.5em 0.5em;
-      border-bottom-right-radius: 1em 0.7em;
-    }
+#savedArtists ul a {
+  color: rgba(200, 200, 200, 1.0);
+  text-decoration: none;
+  font-size: 10pt;
+}
 
-    /* audio::-webkit-media-controls-volume-slider { display: none !important; }
-    audio::-webkit-media-controls-mute-button { display: none !important; } */
+#savedArtists ul a:hover {
+  color: white;
+}
 
-    .players .children {
-      /* width: 20%; */
-    }
+#savedArtists li+li::before {
+  content: ", ";
+  color: grey;
+  padding-right: 0.3rem;
+  /* padding: 0 0.5rem; */
+}
 
-    .players .children.open {
-      position: relative;
-      left: 3rem;
-      margin-top: 1rem;
-    }
+audio {
+  /* width: 139%; ll*/
+  max-width: 260px;
+  /*ll*/
+  height: 24px;
+  display: block;
+  /* overflow: hidden; */
+}
 
-    .tags {
-      margin-bottom: 10px;
-      padding-left: 1rem;
-    }
 
-    details>summary {
-      list-style-type: '';
-    }
+.tags {
+  margin-bottom: 10px;
+  padding-left: 1rem;
+  font-size: 10pt;
+}
 
-    details[open]>summary {
-      list-style-type: '';
-    }
 
-    .player.playing{
-      border: 1px solid grey;
-    }
+/* ========================== */
+
+.playerWrapper { 
+  display: block;
+  height: fit-content;
+  width: fit-content;
+  padding-left: 1rem;
+  width: 420px;
+  margin-bottom: 0.3rem;
+  /* border: 1px dashed orange; */
+} 
+
+/* single container for all */
+#players {
+  padding-top: 5rem;
+  /* padding-left: 1rem; */
+}
+
+.playerWrapper > * {
+  display: inline-block;
+}
+
+.playerWrapper .thumb {
+  width: 60px;
+  /* border: 1px solid red; */
+}
+
+.playerWrapper .thumb img {
+  width: 50px;
+  height: 50px;
+  cursor: pointer;
+  margin-right: 0.5rem;
+  animation: 1s linear 1s linear;
+}
+
+.playerWrapper .player {
+  vertical-align: top;
+  /* width: 200px; */
+  /* width: 400px; */
+  padding: 0 0.5rem;
+  /* border: 1px solid green; */
+}
+
+.playerWrapper .player label {
+  color: rgba(255, 255, 255, 1);
+  font-weight: bold;
+  font-size: 14pt;
+  min-width: 100px;
+  /* width: 20%; */
+}
+
+.playerWrapper .follow {
+  vertical-align: top;
+  width: 40px;
+  /* border: 1px solid yellow; */
+}
+
+.playerWrapper .follow .opener {
+  font-size: 24pt; 
+  cursor: pointer;
+}
+
+.playerWrapper .children {
+  display: none;
+  margin-left: 1.5rem;
+}
+
+.playerWrapper .children.opened {
+  display: block;
+  left: 3rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  border-left: 1px solid grey;
+}
+
+.playerWrapper .children .loading {
+  padding-left: 1rem;
+}
+
+
+.player.playing {
+  border: 1px solid grey;
+}
