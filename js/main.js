@@ -23,7 +23,7 @@ let currentlyPlayingNode = null;
 let lastPlayingNode = null;
 
 let savedArtists = loadSavedArtists();
-console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
+// console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
 
 
 function trunc(str, len=25){
