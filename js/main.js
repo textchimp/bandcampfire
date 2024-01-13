@@ -9,6 +9,9 @@
 const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
+const FORCE_RELOAD = params.get('nocache') || true;
+const APP_VERSION = 0.1;  // Change this to force reload of cached LocalStorage page data
+
 // const cors = 'http://localhost:9999/';
 const cors = 'https://corsproxy.io/?';
 
@@ -121,15 +124,25 @@ async function loadRecPlayers(url, parent) {
   let data = null;
   try {
     const stored = localStorage.getItem(url);
-  if (stored === null) throw new Error('Not found');
-  data = JSON.parse( stored ); 
+    if (stored === null) throw new Error('Not found');
+    data = JSON.parse( stored ); 
+
+    // Force reload of cached LocalStorage data whenever version changes
+    if ( FORCE_RELOAD || data.__version !== APP_VERSION) throw new Error('Old version, refetch');
+  
   } catch( err ){
-    console.warn('Error loading cached data for', url, err);
-  data = await parsePage( url ); // Load actual live data from Bandcamp
-  localStore( url, data );
+    console.warn('LS cache load issue for: ', url, err);
+    data = await  parsePage( url ); // Load actual live data from Bandcamp
+    if(!data){
+      $('#mainTitle').innerHTML = `<span style="color: orange">Could not load URL ("${ url }")</span>`;
+      return false;
+    }
+    // console.log( 'data', data );
+    data.__version = APP_VERSION; 
+    localStore( url, data );
   }
 
-  const {artistName, tagsText, recs} = data;
+  const { artistName, tagsText, recs, albumTracks } = data;
 
   let nestingLevel = 0;
 
@@ -141,14 +154,13 @@ async function loadRecPlayers(url, parent) {
     // parent.style.display = 'block'; // unhide
     console.log( `parent`, parent );
 
-    const tags = document.createElement('div');
-    tags.className = 'tags';
-    const tagsTextStr = tagsText.join(', ');
-    tags.innerHTML = trunc(tagsTextStr, 50);
-    if( tagsTextStr.length >= 50 ){
-      tags.title = tagsTextStr;
-    }
-    parent.appendChild(tags);
+    // Album player
+    const parentPlayer = parent.parentElement.querySelector('audio'); 
+    parent.appendChild( renderAlbumPlayer(albumTracks, parentPlayer) );
+    
+    // Tags list
+    parent.appendChild( renderTags(tagsText) );
+
     nestingLevel = parseInt(parent.dataset.nestingLevel); 
   }
 
@@ -163,14 +175,66 @@ async function loadRecPlayers(url, parent) {
 
 } // loadRecPlayers()
 
+function renderTags( tagsList ){
+  const tags = document.createElement('div');
+  tags.className = 'tags';
+  const tagsTextStr = tagsList.join(', ');
+  tags.innerHTML = 'Tags: ' + trunc(tagsTextStr, 50);
+  if (tagsTextStr.length >= 50) {
+    tags.title = tagsTextStr;
+  }
+  return tags;
+} // renderTags()
+
+function renderAlbumPlayer( tracks, parentAudioNode ){
+  const player = document.createElement('div');
+  player.className = 'albumPlayer';
+  let currentIndex = -1;
+  let totalTracks = tracks.length;
+  player.innerHTML = `<div>Album: <span>1/${totalTracks}. ${tracks[0].title}</span></div>`;
+  player.addEventListener('click', e => {
+    currentIndex = (currentIndex + 1) % totalTracks;    
+    player.innerHTML = `<div>Album: <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
+    parentAudioNode.firstElementChild.src = tracks[currentIndex].audio;
+    parentAudioNode.load();
+    parentAudioNode.play();
+    player.dataset.playing = true;
+  });
+
+  return player;
+} // renderAlbumPlayer()
 
 async function parsePage(url){
 
   const urlEnc = encodeURIComponent(url);
-  const data = await (await fetch(cors + urlEnc)).text();
-  // console.log( url, data );
+  
+  let data = null;
+
+  try {
+    data = await (await fetch(cors + urlEnc)).text();
+    // console.log( 'got', url, data );
+  } catch (error) {
+    console.log( `Bad URL?`, url );
+    return null;    
+  }
 
   const recParts = data.split('class="recommended-album footer');
+
+  const albumJSON = recParts[0].split('data-tralbum="')[1].split('" data')[0];
+  // console.log(`albumJSON`, albumJSON);
+  const albumData = JSON.parse(albumJSON.replaceAll('&quot;', '"') ?? '');
+  console.log( `albumData`, albumData );
+  // const albumTracks = albumData.trackinfo.map(t => t.file['mp3-128']);
+  const albumTracks = albumData.trackinfo
+    .filter( t => t.file !== null )
+    .map( t => ({
+      audio: t.file['mp3-128'], 
+      title: t.title, 
+      url: t.title_link, 
+      id: t.track_id
+    }) );
+
+  console.log( `album`, albumData, albumTracks );
 
   const tags = data.split('a class="tag"');
   const tagsText = tags.slice(1).map(t => t.split('   >')[1].split('</a>')[0]);
@@ -191,9 +255,9 @@ const regex = new RegExp([
 ].map(r => r.source).join(''), 's');
 
 const recs = recParts.slice(1).map(r => regex.exec(r)?.groups);
-// if( !recs ) console.warn('%cREGEX FAILED:');
+console.assert(recs.some(r => r !== null), 'REGEX FAILED');
 
-return { artistName, tagsText, recs };  
+return { artistName, tagsText, recs, albumTracks };  
 
 } // parsePage()
 
@@ -256,7 +320,7 @@ function initHandlers() {
   // (Audio event handlers don't bubble and thus are added to each 
   // element after creation in loadRecPlayers())
 
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     const {target} = e;
     
     // Click thumbnail or band name to toggle play
@@ -282,7 +346,7 @@ function initHandlers() {
         console.log(`LOADED:`, childrenNode.dataset.loaded );
         if (childrenNode.dataset.loaded === 'false') {
           // Only load once
-          loadRecPlayers(childrenNode.dataset.url, childrenNode);
+          await loadRecPlayers(childrenNode.dataset.url, childrenNode);
           childrenNode.dataset.loaded = 'true'; // TODO: neater?
         }
       
@@ -390,25 +454,24 @@ function renderSavedArtists( artists, parent='#savedArtists'){
 
    const list = document.createElement('ul');
    for( const key in artists ){
-    console.log( `key`, key );
-     list.innerHTML += `<li>
-        <a href="?url=${ artists[key] }">${ key }</a>
-      </li>`;  
+     const title = key.length > 25 ? key : '';
+     list.innerHTML += `<li><a title="${ title }" href="?url=${artists[key]}">${ trunc(key, 25) }</a></li>`;  
    }
    $(parent).querySelector('ul').replaceWith(list);
 } // renderSavedArtists()
 
-function loadBodyFromCache(url){
-  try {
-    const body = localStorage.getItem(`body::${url}`);
-    if( body === null ) return false;
-    document.body.innerHTML = body;
-    attachAudioHandlers(document);
-    return true;
-  } catch( err ) {
-    console.log( `Could not load body from cache`, err );
-  }
-} // loadBodyFromCache()
+// NO LONGER USED - 
+// function loadBodyFromCache(url){
+//   try {
+//     const body = localStorage.getItem(`body::${url}`);
+//     if( body === null ) return false;
+//     document.body.innerHTML = body;
+//     attachAudioHandlers(document);
+//     return true;
+//   } catch( err ) {
+//     console.log( `Could not load body from cache`, err );
+//   }
+// } // loadBodyFromCache()
 
 
 function loadSavedArtists(){

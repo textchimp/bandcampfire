@@ -81,7 +81,7 @@ header .playing > span {
 #savedArtists li+li::before {
   content: ",";
   color: grey;
-  padding-right: 0.2rem;
+  padding-right: 0.3rem;
   /* padding: 0 0.5rem; */
 }
 
@@ -100,6 +100,19 @@ audio {
   padding-left: 1rem;
   font-size: 10pt;
 }
+
+.albumPlayer {
+  padding-left: 1rem;
+}
+
+.albumPlayer span{
+  cursor: pointer;
+}
+
+.albumPlayer[data-playing="true"] span {
+  font-weight: bold;
+}
+
 
 
 /* ========================== */
