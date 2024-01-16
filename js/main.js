@@ -34,8 +34,8 @@
 const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
-const FORCE_RELOAD = params.get('nocache') || false;
-const APP_VERSION = 0.1;  // Change this to force reload of cached LocalStorage page data
+const FORCE_RELOAD = params.get('nocache') !== null || false;  // reload ALL
+const APP_VERSION = 0.2;  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
 
 // const cors = 'http://localhost:9999/';
 const cors = 'https://corsproxy.io/?';
@@ -305,51 +305,167 @@ async function parsePage(url){
     return null;    
   }
 
-  const recParts = data.split('class="recommended-album footer');
+  
+  // console.log( `html`, data );
 
-  // const albumJSON = recParts[0].split('data-tralbum="')[1].split('" data')[0];
-  // const albumJSON = recParts[0].split('data-tralbum="')[1].split(/(" data )|(")/)[0];
-  console.log( `recParts[0]`, recParts[0] );
-  const albumJSON = recParts[0].split('data-tralbum="')[1].split('"')[0];
-  console.log(`albumJSON`, albumJSON);
-  const albumData = JSON.parse(albumJSON.replaceAll('&quot;', '"') ?? '');
-  console.log( `albumData`, albumData );
-  // const albumTracks = albumData.trackinfo.map(t => t.file['mp3-128']);
+  // console.time('DOM parse')
+  
+  // Parse as DOM structure to prevent regular breaking of these
+  // extremely fragile regex/splits
+  const parser = new DOMParser();
+  const pageDom = parser.parseFromString(data, 'text/html');
+
+  let recs, tagsText, artistName;
+  const pageBlob = pageDom.querySelector('script[data-pagedata-blob]');
+
+  // WHY?! Why are pages either "blobs + no HTML" or "no blobs + HTML" ????
+  // What am I missing?
+  if( pageBlob ){
+
+    console.log( `Page: JSON BLOB mode` );
+
+    const pageMeta = JSON.parse(pageBlob.dataset.pagedataBlob);
+    // console.log(`pageMeta`, pageMeta);
+
+    const recData = pageMeta.recommendations_footer.album_recs;
+    const getArtUrl = (id, size = '6') => `https://f4.bcbits.com/img/a${id.toString().padStart(10, '0')}_${size}.jpg`; // '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail
+    // console.log(`art`, recData);
+    console.log(`recs BLOB`, pageMeta.recommendations_footer.album_recs[0] );
+
+    recs = pageMeta.recommendations_footer.album_recs.map(r => ({
+      audio: r.audio_url,
+      album: r.album_title,
+      img: getArtUrl(r.art_id), // TODO: save as id, construct URL on render
+      albumUrl: r.href, //.split('?')[0], // skip referer ID param
+      bandId: r.band_id,
+      albumId: r.album_id,
+      artist: r.band_name,
+    }));
+
+    console.assert(recs.some(r => r !== null), 'recs parse FAILED');
+
+
+    // Tags requires us to parse this script JSON just for 'keywords'!
+    // MISSING for some pages, as above
+    const albumHeaderStr = pageDom.querySelector('script#tralbum-jsonld');
+    const albumHeader = JSON.parse(albumHeaderStr.innerHTML);
+    tagsText = albumHeader.keywords
+    // console.log(`tags (JSON blob)`, tagsText);
+
+    artistName = pageDom.querySelector('div.band-info > div.name')?.innerHTML;
+
+    // pageBlob is found
+  } else {
+
+    // INSTEAD: recs HTML is found, no JSON blobs
+    console.log(`Page: HTML tags mode`);
+
+
+    const recsNodes = pageDom.querySelectorAll('li.recommended-album');
+    recs = [...recsNodes].map( r => ({
+      audio: r.dataset.audiourl.split('mp3-128":')[1].split('"')[1],
+      album: r.dataset.albumtitle,
+      img: r.firstElementChild.firstElementChild.src, // TODO: save as id, construct URL on render;
+      albumUrl: r.querySelector('a.album-link').href,
+      albumId: r.dataset.albumid,
+      artistId: r.dataset.artistid,
+      artist: r.dataset.artist,
+    }));
+
+    const tagNodes = pageDom.querySelectorAll('a.tag');
+    // console.log( `tags`, tagNodes );
+    tagsText = [...tagNodes].map( t => t.innerHTML );
+
+    
+    artistName = pageDom.querySelector('p#band-name-location > span.title')?.innerHTML;
+    // console.log( `artistName`, artistName );
+
+  } // no JSON blobs 
+  
+
+
+  // Album track info
+  const album = pageDom.querySelector('script[data-tralbum]');
+  const albumData = JSON.parse(album.dataset.tralbum);
+  // console.log(`albuminfo`, albumData);
+
   const albumTracks = albumData.trackinfo
     .filter( t => t.file !== null )
     .map( t => ({
       audio: t.file['mp3-128'], 
       title: t.title, 
       url: t.title_link, 
-      id: t.track_id
+      id: t.id
     }) );
+  // console.log( `album`, albumData, albumTracks );
 
-  console.log( `album`, albumData, albumTracks );
 
-  const tags = data.split('a class="tag"');
-  const tagsText = tags.slice(1).map(t => t.split('   >')[1].split('</a>')[0]);
-
-// So funky
-const artistName = data.split('id="name-section"')[1].split('href=')[1].split('>')[1].split('</a')[0];
-
-// NASTY but beats parsing the HTML?
-// Multiline formatting via: https://stackoverflow.com/a/34755045
-// const regex = /data-audiourl="(?<audio>.*?)".*data-albumtitle="(?<album>.*?)".*data-artist="(?<artist>.*?)".*img class="album-art" src="(?<img>.*?)".*a class="album-link" href="(?<albumUrl>.*?)"(.*span class="comment-contents"\>(?<comment>.*?)\<\/span)?/ms;
-const regex = new RegExp([
-  /data-audiourl="(?<audio>.*?)".*/,
-  /data-albumtitle="(?<album>.*?)".*/,
-  /data-artist="(?<artist>.*?)".*/,
-  /img class="album-art" src="(?<img>.*?)".*/,
-  /a class="album-link" href="(?<albumUrl>.*?)(\?|").*/, // note literal ? to ignore querystring for album URL
-  /(.*span class="comment-contents"\>(?<comment>.*?)\<\/span)?/,
-].map(r => r.source).join(''), 's');
-
-const recs = recParts.slice(1).map(r => regex.exec(r)?.groups);
-console.assert(recs.some(r => r !== null), 'REGEX FAILED');
+// console.timeEnd('DOM parse');
+console.log('OBJ', { artistName, tagsText, recs, albumTracks } );
 
 return { artistName, tagsText, recs, albumTracks };  
 
 } // parsePage()
+
+// async function OLDparsePageOLD(url){
+
+//   const urlEnc = encodeURIComponent(url);
+  
+//   let data = null;
+
+//   try {
+//     data = await (await fetch(cors + urlEnc)).text();
+//     // console.log( 'got', url, data );
+//   } catch (error) {
+//     console.log( `Bad URL?`, url );
+//     return null;    
+//   }
+
+//   const recParts = data.split('class="recommended-album footer');
+
+//   // const albumJSON = recParts[0].split('data-tralbum="')[1].split('" data')[0];
+//   // const albumJSON = recParts[0].split('data-tralbum="')[1].split(/(" data )|(")/)[0];
+//   console.log( `recParts[0]`, recParts[0] );
+//   const albumJSON = recParts[0].split('data-tralbum="')[1].split('"')[0];
+//   console.log(`albumJSON`, albumJSON);
+//   const albumData = JSON.parse(albumJSON.replaceAll('&quot;', '"') ?? '');
+//   console.log( `albumData`, albumData );
+//   // const albumTracks = albumData.trackinfo.map(t => t.file['mp3-128']);
+//   const albumTracks = albumData.trackinfo
+//     .filter( t => t.file !== null )
+//     .map( t => ({
+//       audio: t.file['mp3-128'], 
+//       title: t.title, 
+//       url: t.title_link, 
+//       id: t.track_id
+//     }) );
+
+//   console.log( `album`, albumData, albumTracks );
+
+//   const tags = data.split('a class="tag"');
+//   const tagsText = tags.slice(1).map(t => t.split('   >')[1].split('</a>')[0]);
+
+// // So funky
+// const artistName = data.split('id="name-section"')[1].split('href=')[1].split('>')[1].split('</a')[0];
+
+// // NASTY but beats parsing the HTML?
+// // Multiline formatting via: https://stackoverflow.com/a/34755045
+// // const regex = /data-audiourl="(?<audio>.*?)".*data-albumtitle="(?<album>.*?)".*data-artist="(?<artist>.*?)".*img class="album-art" src="(?<img>.*?)".*a class="album-link" href="(?<albumUrl>.*?)"(.*span class="comment-contents"\>(?<comment>.*?)\<\/span)?/ms;
+// const regex = new RegExp([
+//   /data-audiourl="(?<audio>.*?)".*/,
+//   /data-albumtitle="(?<album>.*?)".*/,
+//   /data-artist="(?<artist>.*?)".*/,
+//   /img class="album-art" src="(?<img>.*?)".*/,
+//   /a class="album-link" href="(?<albumUrl>.*?)(\?|").*/, // note literal ? to ignore querystring for album URL
+//   /(.*span class="comment-contents"\>(?<comment>.*?)\<\/span)?/,
+// ].map(r => r.source).join(''), 's');
+
+// const recs = recParts.slice(1).map(r => regex.exec(r)?.groups);
+// console.assert(recs.some(r => r !== null), 'REGEX FAILED');
+
+// return { artistName, tagsText, recs, albumTracks };  
+
+// } // parsePage()
 
 function localStore(url, data) {
   try {
@@ -360,6 +476,8 @@ function localStore(url, data) {
 }
 
 function recPlayerTemplate(match, level) {
+  // console.log( `recPlayerTemplate:`, match );
+  //   <source src=${match.audio.split('mp3-128&quot;:')[1].split('&quot;')[1]}>
 
   return `
   <div class="playerWrapper">
@@ -376,7 +494,7 @@ function recPlayerTemplate(match, level) {
         data-image="${match.img}" 
         data-nesting-level="${level}"
       >
-        <source src=${match.audio.split('mp3-128&quot;:')[1].split('&quot;')[1]}>
+        <source src=${ match.audio }>
       </audio>
     </div>
     
@@ -542,7 +660,7 @@ async function init() {
   randomFolder.open();
 
   controlsGui.close();
-  controlsGui.hide();
+  // controlsGui.hide();
 };
 
 function renderSavedArtists( artists, parent='#savedArtists'){
