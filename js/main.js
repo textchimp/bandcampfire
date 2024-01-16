@@ -1,15 +1,40 @@
 /*
+
+  Shortcuts:
+    - 's'  (while playing) save artist to faves
+    - shift + click (on song) open in new tab
+
+
   TODO:
-  - toggle random/sequence play mode
+
   - toggle for 'play only expanded' vs 'all'
-  - 'Loading...' for root/home
+
+  - hide recs that have already appeared too often in tree?
+
+  - skip random play of "recently played" tracks (slider to control) ... LS play history reqd
+
+  - highlight bands also in Saved list
+
+  - add 'treeState' LS to remember tree open/collapsed view on load
+
+    - use tree to do 'random follow' 0-100% i.e. how often to randomly open a node and play one of the children (currently works using click() and dat.gui)
+    - control var for 'max tree depth' when randomly expanding tree
+
+  - decide how to handle albums tracks in random/next play context (toggles for including in random or not?) ---- Not an issue if album tracks re-use parent rec player? i.e. not included by default... but how to include if wanted?
+
+  - layout shrink to smaller thumbnail and single-row label + player when UI gets too long vertically? i.e. 'compact mode'  ... length of band names an issues for consistent width of row?
+  - mobile mode with larger play controls
+
+  - replace default audio player widget for more layout customisation
+
+  - mobile touch/hold interactions?
 
 // https://essential-audio-player.net/
 */
 const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
-const FORCE_RELOAD = params.get('nocache') || true;
+const FORCE_RELOAD = params.get('nocache') || false;
 const APP_VERSION = 0.1;  // Change this to force reload of cached LocalStorage page data
 
 // const cors = 'http://localhost:9999/';
@@ -27,6 +52,41 @@ let lastPlayingNode = null;
 
 let savedArtists = loadSavedArtists();
 // console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
+
+const songTree = { [startUrl]: { children: {}, status: null } };
+let currentSongTreeNode = songTree[startUrl];
+
+
+let controlsGui = null;
+const controls = {
+  randomAdvance: true,
+  randomExpandNewProb: 1.0,
+};
+
+
+
+
+// https://bobbyhadz.com/blog/javascript-wait-for-element-to-exist
+
+function waitForElementToExistAt(selector, node) {
+  return new Promise(resolve => {
+    if (node.querySelector(selector)) {
+      return resolve(node.querySelector(selector));
+    }
+
+    const observer = new MutationObserver(() => {
+      if (node.querySelector(selector)) {
+        resolve(node.querySelector(selector));
+        observer.disconnect();
+      }
+    });
+
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+    });
+  });
+}
 
 
 function trunc(str, len=25){
@@ -63,23 +123,46 @@ function audioPauseHandler(e){
   headerImg.style.display = 'inline';
 } //audioPlayHandler()
 
-function advanceTrack(ev, randomOrder=true){
+function advanceTrack(ev, randomOrder=false){
   // actually 'ended' event handler
 
   ev?.target?.closest('.player').classList.remove('playing');
 
   const players = $$('audio');
-  if( randomOrder ){
-    let randomPlayer = ev.target; // guarantee 1 try below
-  while( randomPlayer === ev.target ){
-    randomPlayer = players[Math.floor(players.length * Math.random())];
+  if( controls.randomAdvance || randomOrder ){
+
+    if( Math.random() < controls.randomExpandNewProb ){
+      quickNastyRandomExpand();
+    } else {
+      // Normal random
+      let randomPlayer = ev.target; // guarantee 1 try below
+      while( randomPlayer === ev.target ){
+        randomPlayer = players[Math.floor(players.length * Math.random())];
+      }
+      randomPlayer.play();
     }
-  randomPlayer.play();
+
   } else {
     // const justEnded = $$( 'audio' ).findIndex;
   }
 } // advanceTrack()
 
+async function quickNastyRandomExpand(){
+
+  const unopened = $$('.opener[data-loaded="false"]');
+  const randy = unopened[Math.floor(Math.random() * unopened.length)]
+  randy.scrollIntoView({ behavior: "smooth", inline: "nearest" });
+  randy.click();
+
+  const childRecs = randy.parentElement.nextElementSibling;
+  await waitForElementToExistAt('.player', childRecs);
+
+  const players = childRecs.querySelectorAll('audio');
+  const randPlayer = players[Math.floor(Math.random() * players.length)];
+  randPlayer.play();
+  randPlayer.scrollIntoView({ behavior: "smooth", inline: "nearest" });
+
+}
 
 function userAdvanceTrack(){
   const players = [...$$('audio')];
@@ -131,7 +214,7 @@ async function loadRecPlayers(url, parent) {
     if ( FORCE_RELOAD || data.__version !== APP_VERSION) throw new Error('Old version, refetch');
   
   } catch( err ){
-    console.warn('LS cache load issue for: ', url, err);
+    console.warn('LS cache load issue for: ', url, err.message);
     data = await  parsePage( url ); // Load actual live data from Bandcamp
     if(!data){
       $('#mainTitle').innerHTML = `<span style="color: orange">Could not load URL ("${ url }")</span>`;
@@ -171,7 +254,10 @@ async function loadRecPlayers(url, parent) {
 
   attachAudioHandlers(parent);
 
-  // localStorage.setItem(`body::${url}`, document.body.innerHTML);
+  // Update tree
+  recs.forEach( r => {
+    currentSongTreeNode.children[ r.albumUrl ] = { children: {}, status: null };
+  });
 
 } // loadRecPlayers()
 
@@ -191,10 +277,11 @@ function renderAlbumPlayer( tracks, parentAudioNode ){
   player.className = 'albumPlayer';
   let currentIndex = -1;
   let totalTracks = tracks.length;
-  player.innerHTML = `<div>Album: <span>1/${totalTracks}. ${tracks[0].title}</span></div>`;
+  player.innerHTML = `<div><a href="${parentAudioNode.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>1/${totalTracks}. ${tracks[0].title}</span></div>`;
   player.addEventListener('click', e => {
     currentIndex = (currentIndex + 1) % totalTracks;    
-    player.innerHTML = `<div>Album: <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
+    player.innerHTML = `<div><a href="${parentAudioNode.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
+   
     parentAudioNode.firstElementChild.src = tracks[currentIndex].audio;
     parentAudioNode.load();
     parentAudioNode.play();
@@ -220,8 +307,11 @@ async function parsePage(url){
 
   const recParts = data.split('class="recommended-album footer');
 
-  const albumJSON = recParts[0].split('data-tralbum="')[1].split('" data')[0];
-  // console.log(`albumJSON`, albumJSON);
+  // const albumJSON = recParts[0].split('data-tralbum="')[1].split('" data')[0];
+  // const albumJSON = recParts[0].split('data-tralbum="')[1].split(/(" data )|(")/)[0];
+  console.log( `recParts[0]`, recParts[0] );
+  const albumJSON = recParts[0].split('data-tralbum="')[1].split('"')[0];
+  console.log(`albumJSON`, albumJSON);
   const albumData = JSON.parse(albumJSON.replaceAll('&quot;', '"') ?? '');
   console.log( `albumData`, albumData );
   // const albumTracks = albumData.trackinfo.map(t => t.file['mp3-128']);
@@ -275,7 +365,7 @@ function recPlayerTemplate(match, level) {
   <div class="playerWrapper">
   
     <div class="thumb">
-      <img src="${match.img}">
+      <img src="${match.img}" title="">
     </div>
 
     <div class="player">
@@ -291,7 +381,7 @@ function recPlayerTemplate(match, level) {
     </div>
     
     <div class="follow">
-      <span class="opener">⤵︎</span>
+      <span class="opener" data-loaded="false">⤵︎</span>
     </div>
     
     <div class="children"
@@ -440,38 +530,38 @@ function initHandlers() {
 
 async function init() {
   // if( !loadBodyFromCache(startUrl) ){
-    await loadRecPlayers(startUrl, document.querySelector('#players'));
+    await loadRecPlayers(startUrl, document.querySelector('#players'), songTree[startUrl]);
   // }
   initHandlers();
   renderSavedArtists(savedArtists);
+
+  controlsGui = new dat.GUI(); //({ closed: true });
+  const randomFolder = controlsGui.addFolder('Random');
+  randomFolder.add(controls, 'randomAdvance').name('Random Next');
+  randomFolder.add(controls, 'randomExpandNewProb', 0.0, 1.0).name('Expand Prob.');
+  randomFolder.open();
+
+  controlsGui.close();
+  controlsGui.hide();
 };
 
 function renderSavedArtists( artists, parent='#savedArtists'){
    // TODO: display in order-added
-    if(Object.keys(artists).length === 0 ){
-      return;
-    }
+    if(Object.keys(artists).length === 0 ) return;
+    
 
-   const list = document.createElement('ul');
+   const list = document.createElement('span');
+   list.className = 'savedList';
+   let i = 0;
+   const maxIndex = Object.keys(artists).length - 1;
    for( const key in artists ){
      const title = key.length > 25 ? key : '';
-     list.innerHTML += `<li><a title="${ title }" href="?url=${artists[key]}">${ trunc(key, 25) }</a></li>`;  
+     const comma =  i < maxIndex ? '<span class="comma">, </span>' : ''; 
+     list.innerHTML += `<span><a title="${ title }" href="?url=${artists[key]}">${ trunc(key, 25) }</a>${ comma }</span>`;  
+     i++;
    }
-   $(parent).querySelector('ul').replaceWith(list);
+   $(parent).querySelector('.savedList').replaceWith(list);
 } // renderSavedArtists()
-
-// NO LONGER USED - 
-// function loadBodyFromCache(url){
-//   try {
-//     const body = localStorage.getItem(`body::${url}`);
-//     if( body === null ) return false;
-//     document.body.innerHTML = body;
-//     attachAudioHandlers(document);
-//     return true;
-//   } catch( err ) {
-//     console.log( `Could not load body from cache`, err );
-//   }
-// } // loadBodyFromCache()
 
 
 function loadSavedArtists(){

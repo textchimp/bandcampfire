@@ -13,7 +13,7 @@ header, footer {
   padding-left: 1rem;
   width: 100vw;
   margin: 0;
-  z-index: 1;
+  z-index: 2 !important; 1;
 }
 
 footer {
@@ -52,38 +52,26 @@ header .playing > span {
   color: grey;
 }
 
-#savedArtists ul {
+#savedArtists {
   display: inline-block;
   padding-left: 0.5rem;
   height: 1rem;
   margin: 0;
-
   color: gray;
   font-size: 11pt;
 }
 
-#savedArtists li{
-  display: inline-block;
-  list-style-type: none;
-  /* padding-left: 1rem; */
-}
-
-#savedArtists ul a {
+#savedArtists .savedList a {
   color: rgba(200, 200, 200, 1.0);
   text-decoration: none;
   font-size: 10pt;
 }
 
-#savedArtists ul a:hover {
+#savedArtists .savedList a:hover {
   color: white;
 }
 
-#savedArtists li+li::before {
-  content: ",";
-  color: grey;
-  padding-right: 0.3rem;
-  /* padding: 0 0.5rem; */
-}
+
 
 audio {
   /* width: 139%; ll*/
@@ -105,7 +93,7 @@ audio {
   padding-left: 1rem;
 }
 
-.albumPlayer span{
+.albumPlayer div span{
   cursor: pointer;
 }
 
@@ -113,7 +101,10 @@ audio {
   font-weight: bold;
 }
 
-
+.albumPlayer a {
+  text-decoration: none;
+  color: white;
+}
 
 /* ========================== */
 
@@ -156,12 +147,13 @@ audio {
   /* width: 200px; */
   /* width: 400px; */
   padding: 0 0.5rem;
+  padding-bottom: 4px;
   /* border: 1px solid green; */
 }
 
 .playerWrapper .player label {
   color: rgba(255, 255, 255, 1);
-  font-weight: bold;
+  /* font-weight: /; */
   font-size: 14pt;
   min-width: 100px;
   cursor: pointer;
@@ -199,4 +191,10 @@ audio {
 
 .player.playing {
   border: 1px solid grey;
+}
+
+.dg {
+  z-index: 2 !important;
+  right: -1rem !important;
+  /* opacity: 0.5; */
 }
