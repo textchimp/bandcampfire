@@ -53,7 +53,7 @@ const $$ = document.querySelectorAll.bind(document);
 
 let baseElement = null;
 let currentlyPlayingNode = null;
-let lastPlayingNode = null;
+// let lastPlayingNode = null;
 
 let savedArtists = loadSavedArtists();
 // console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
@@ -69,7 +69,7 @@ const controls = {
 };
 
 
-
+let mainAudioPlayer = $('#mainPlayer');
 
 // Mobile swipe handler code
 // from https://stackoverflow.com/a/62825217
@@ -103,7 +103,7 @@ function handleGesture(ev) {
 
   if (touchendX > touchstartX) {
     // alert('Swiped Right');
-    advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
+    // advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
   }
 
 
@@ -162,20 +162,20 @@ function audioPauseHandler(e){
  function audioPlayHandler({target}) {
   console.log( `audioPlayHandler()` );
   currentlyPlayingNode = target;
-  $$('audio').forEach(el => el !== target && el.pause());
+  // $$('audio').forEach(el => el !== target && el.pause());
   console.log( `new play level:`, target.dataset.nestingLevel );
 
   // TODO: Remove deeper levels breadcrumb  when newest playing is from a higher level
-  let playTitleNode = document.querySelector(`#mainTitle .playing[data-nesting-level="${target.dataset.nestingLevel}"]`);
-  if( !playTitleNode ){
-    playTitleNode = document.createElement('span');
-    playTitleNode.className = 'playing';
-    playTitleNode.dataset.nestingLevel = target.dataset.nestingLevel;
-    document.querySelector('#mainTitle').appendChild(playTitleNode);
-  } 
-  playTitleNode.innerHTML = `<span>&gt;</span>${target.dataset.artist}`;   
+  // let playTitleNode = document.querySelector(`#mainTitle .playing[data-nesting-level="${target.dataset.nestingLevel}"]`);
+  // if( !playTitleNode ){
+  //   // playTitleNode = document.createElement('span');
+  //   // playTitleNode.className = 'playing';
+  //   // playTitleNode.dataset.nestingLevel = target.dataset.nestingLevel;
+  //   // document.querySelector('#mainTitle').appendChild(playTitleNode);
+  // } 
+  // playTitleNode.innerHTML = `<span>&gt;</span>${target.dataset.artist}`;   
 
-  target.closest('.player').classList.add('playing');
+  // target.closest('.player').classList.add('playing');
 
   const headerImg = $('header img');
   console.log( `playing node:`, currentlyPlayingNode );
@@ -183,23 +183,28 @@ function audioPauseHandler(e){
   headerImg.style.display = 'inline';
 } //audioPlayHandler()
 
-function advanceTrack(ev, randomOrder=false){
+function advanceTrack(randomOrder=false){
   // actually 'ended' event handler
 
-  ev?.target?.closest('.player').classList.remove('playing');
+  // ev?.target?.closest('.player').classList.remove('playing');
 
-  const players = $$('audio');
+  const players = $$('.playerWrapper');
+  
   if( controls.randomAdvance || randomOrder ){
 
     if( Math.random() < controls.randomExpandNewProb ){
       quickNastyRandomExpand();
     } else {
+
       // Normal random
-      let randomPlayer = ev.target; // guarantee 1 try below
-      while( randomPlayer === ev.target ){
+      let randomPlayer = { audioSrc: mainAudioPlayer.src }; // guarantee 1 try below
+      while( randomPlayer.audioSrc === mainAudioPlayer.src ){
         randomPlayer = players[Math.floor(players.length * Math.random())];
       }
-      randomPlayer.play();
+      // randomPlayer.play();
+      loadAudio( randomPlayer.dataset );
+      $('.playing')?.classList.remove('playing');
+      randomPlayer.classList.add('playing');
       randomPlayer.scrollIntoView({ behavior: "smooth", inline: "nearest" });
 
     }
@@ -217,37 +222,75 @@ async function quickNastyRandomExpand(){
   randy.click();
 
   const childRecs = randy.parentElement.nextElementSibling;
-  await waitForElementToExistAt('.player', childRecs);
+  await waitForElementToExistAt('.playerWrapper', childRecs);
 
-  const players = childRecs.querySelectorAll('audio');
+  const players = childRecs.querySelectorAll('.playerWrapper');
   const randPlayer = players[Math.floor(Math.random() * players.length)];
-  randPlayer.play();
+  loadAudio( randPlayer.dataset );
+  $('.playing')?.classList.remove('playing');
+  randPlayer.classList.add('playing');
   randPlayer.scrollIntoView({ behavior: "smooth", inline: "nearest" });
 
 }
 
 function userAdvanceTrack(){
-  const players = [...$$('audio')];
-  const playingIndex = players.findIndex(a => a.duration > 0 && !a.paused);
-  console.log(`found`, playingIndex);
-  let nextIndex = playingIndex + 1;
-  if (nextIndex > players.length - 1) {
-    nextIndex = 0;
+
+  // const players = [...$$('audio')];
+  // const playingIndex = players.findIndex(a => a.duration > 0 && !a.paused);
+  // console.log(`found`, playingIndex);
+  // let nextIndex = playingIndex + 1;
+  // if (nextIndex > players.length - 1) {
+  //   nextIndex = 0;
+  // }
+  // console.log(`playing`, playingIndex, nextIndex);
+  // players[nextIndex].play();
+}
+
+function playToggle(parent){
+
+  if( !parent ){
+    mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
+    return;
   }
-  console.log(`playing`, playingIndex, nextIndex);
-  players[nextIndex].play();
-}
+  // console.log( `playToggle`, parent.dataset, mainAudioPlayer );
 
-function playToggle(audio){
-  audio.paused ? audio.play() : audio.pause();
-}
+  // Play if paused, or if clicked track is different to playing track
+  if( mainAudioPlayer.paused || mainAudioPlayer.src !== parent.dataset.audioSrc){
+    loadAudio(parent.dataset);
+    $('.playing')?.classList.remove('playing');
+    parent.classList.add('playing');
+  } else {
+    mainAudioPlayer.pause();  
+  }
 
-  function playOrOpen(ev, audio) {
+} // playToggle()
+
+function loadAudio( args ){
+  // mainAudioPlayer.firstElementChild.src = args.audioSrc;
+  updatePlayerUi(args);
+  mainAudioPlayer.src = args.audioSrc;
+  mainAudioPlayer.load();
+  mainAudioPlayer.play();
+} // loadAudio()
+
+function updatePlayerUi( args ){
+  $('#player .artist-name').innerHTML = args.artist;
+  
+  // We only know the name of the track for album tracks, not recs
+  $('#player .song-title').innerHTML = args.title || '(recommended track)';
+  // $('#player .song-title').innerHTML = args.
+
+  $('#player .image img').src = args.image;
+
+} // updatePlayerUi()
+
+function playOrOpen(ev, parent) {
+  // TODO: shiftKey NOT AVAILABLE for mobile
   if (ev.shiftKey) {
-    window.open(audio.dataset.url, '_blank');
+    window.open(parent.dataset.url, '_blank');
     ev.preventDefault();
   } else {
-    playToggle(audio);
+    playToggle(parent);
   }
 }
 
@@ -282,7 +325,7 @@ async function loadRecPlayers(url, parent) {
     data = await  parsePage( url ); // Load actual live data from Bandcamp
     console.log(`%cPage data RE-FETCHED`, 'color:green' );
     if(!data){
-      $('#mainTitle').innerHTML = `<span style="color: orange">Could not load URL ("${ url }")</span>`;
+      // $('#mainTitle').innerHTML = `<span style="color: orange">Could not load URL ("${ url }")</span>`;
       return false;
     }
     // console.log( 'data', data );
@@ -297,7 +340,8 @@ async function loadRecPlayers(url, parent) {
   let nestingLevel = 0;
 
   if( isBase ){
-    $('#mainTitle').innerHTML = `<span>${trunc(artistName)}</span>`;
+    // $('#mainTitle').innerHTML = `<span>${trunc(artistName)}</span>`;
+    $('#player .artist-name').innerHTML = trunc(artistName, 40);
   } else {
     // nested
     parent.firstElementChild.remove(); // loading message
@@ -305,8 +349,8 @@ async function loadRecPlayers(url, parent) {
     console.log( `parent`, parent );
 
     // Album player
-    const parentPlayer = parent.parentElement.querySelector('audio'); 
-    parent.appendChild( renderAlbumPlayer(albumTracks, parentPlayer) );
+    // const parentPlayer = parent.parentElement.querySelector('audio'); 
+    parent.appendChild( renderAlbumPlayer(albumTracks, parent.parentElement) ); // args is .playerWrapper with data attribs
     
     // Tags list
     parent.appendChild( renderTags(tagsText) );
@@ -319,7 +363,7 @@ async function loadRecPlayers(url, parent) {
   playersNode.innerHTML += recs.map( r => recPlayerTemplate(r, nestingLevel) ).join('');
   parent.appendChild(playersNode);
 
-  attachAudioHandlers(parent);
+  // attachAudioHandlers(parent);
 
   // Update tree
   recs.forEach( r => {
@@ -339,20 +383,23 @@ function renderTags( tagsList ){
   return tags;
 } // renderTags()
 
-function renderAlbumPlayer( tracks, parentAudioNode ){
+function renderAlbumPlayer( tracks, parent ){
   const player = document.createElement('div');
   player.className = 'albumPlayer';
   let currentIndex = -1;
   let totalTracks = tracks.length;
-  player.innerHTML = `<div><a href="${parentAudioNode.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>1/${totalTracks}. ${tracks[0].title}</span></div>`;
+  player.innerHTML = `<div><a href="${parent.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>1/${totalTracks}. ${tracks[0].title}</span></div>`;
   player.addEventListener('click', e => {
     currentIndex = (currentIndex + 1) % totalTracks;    
-    player.innerHTML = `<div><a href="${parentAudioNode.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
+    player.innerHTML = `<div><a href="${parent.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
    
-    parentAudioNode.firstElementChild.src = tracks[currentIndex].audio;
-    parentAudioNode.load();
-    parentAudioNode.play();
-    player.dataset.playing = true;
+    // parent.firstElementChild.src = tracks[currentIndex].audio;
+    // parent.load();
+    // parent.play();
+    // player.dataset.playing = true;
+    e.target.classList.add('playing');
+    loadAudio( parent.dataset );
+    
   });
 
   return player;
@@ -395,8 +442,10 @@ async function parsePage(url){
     // console.log(`pageMeta`, pageMeta);
 
     const recData = pageMeta.recommendations_footer.album_recs;
-    const getArtUrl = (id, size = '6') => `https://f4.bcbits.com/img/a${id.toString().padStart(10, '0')}_${size}.jpg`; // '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail
     // console.log(`art`, recData);
+    
+    const getArtUrl = (id, size = '6') => `https://f4.bcbits.com/img/a${id.toString().padStart(10, '0')}_${size}.jpg`; // '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail
+    
     console.log(`recs BLOB`, pageMeta.recommendations_footer.album_recs[0] );
 
     recs = pageMeta.recommendations_footer.album_recs.map(r => ({
@@ -547,12 +596,22 @@ function recPlayerTemplate(match, level) {
   //   <source src=${match.audio.split('mp3-128&quot;:')[1].split('&quot;')[1]}>
 
   return `
-  <div class="playerWrapper">
+  <div class="playerWrapper"
+    data-url="${match.albumUrl}" 
+    data-artist="${match.artist}"
+    data-image="${match.img}" 
+    data-nesting-level="${level}"
+    data-audio-src="${ match.audio }"
+  >
   
+
     <div class="thumb">
-      <img src="${match.img}" title="">
+      <img class="album-image" src="${match.img}" title="">
+      <span class="artist">${trunc(match.artist)}</span>
     </div>
 
+
+    <!--
     <div class="player">
       <label class="artist">${trunc(match.artist)}</label>
       <audio controls 
@@ -564,6 +623,7 @@ function recPlayerTemplate(match, level) {
         <source src=${ match.audio }>
       </audio>
     </div>
+    -->
     
     <div class="follow">
       <span class="opener" data-loaded="false">⤵︎</span>
@@ -596,15 +656,35 @@ function initHandlers() {
   // element after creation in loadRecPlayers())
 
   document.addEventListener('click', async e => {
+    
     const {target} = e;
     
+    console.log( `CLICK`, target.className );
+
+    // Pause toggle for band/song name/album art in header
+    // TODO: these don't need to be in the delegated click handler
+    if( target.className === 'controls' ){
+      advanceTrack();
+    }
+
+    if (['artist-name', 'song-title', 'header-album-image'].includes(target.className) ){
+      return playToggle(); // no arg to just pause/play
+    }
+
+
+
     // Click thumbnail or band name to toggle play
-    if( target.parentNode.className === 'thumb'){
-      return playOrOpen(e, target.parentNode.parentNode.querySelector('audio') );
-    } 
-    if( target.className === 'artist' ){
-      return playOrOpen(e, target.nextElementSibling);
-    } 
+    if( ['artist', 'thumb', 'album-image'].includes(target.className) ){
+      return playOrOpen( e, e.target.closest('.playerWrapper') );
+    }
+
+    // // Click thumbnail or band name to toggle play
+    // if( target.parentNode.className === 'thumb'){
+    //   return playOrOpen(e, target.parentNode.parentNode.querySelector('audio') );
+    // } 
+    // if( target.className === 'artist' ){
+    //   return playOrOpen(e, target.nextElementSibling);
+    // } 
     
 
     // Open button for following rec band (nesting)
@@ -708,6 +788,10 @@ function initHandlers() {
       window.location = `?url=${pasted}`;
     }
   });
+
+  mainAudioPlayer.addEventListener('play', audioPlayHandler);
+  mainAudioPlayer.addEventListener('ended', advanceTrack);
+  mainAudioPlayer.addEventListener('pause', audioPauseHandler);
 
 } // initHandlers()
 

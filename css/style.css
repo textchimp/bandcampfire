@@ -8,12 +8,18 @@ body {
 }
 
 header, footer {
+  box-sizing: border-box;
   position: fixed;
   background-color: rgba(20,20,20,1);
   padding-left: 1rem;
+  padding-right: 1rem;
   width: 100vw;
   margin: 0;
   z-index: 2 !important;
+}
+
+header {
+  top: 0;
 }
 
 footer {
@@ -28,19 +34,68 @@ header h3 {
   width: 89%;
 }
 
-header img {
-  display: none;
-  position: absolute;
-  right: 1rem;
-  width: 50px;
-  height: 50px;
-  margin: 0.5rem;
-}
 
 header .playing > span {
   font-weight: normal;
   padding: 0 0.6rem;
   opacity: 0.5;
+}
+
+#player {
+  /* width: calc(100% - 2rem); */
+  /* border: 1px solid red; */
+  box-sizing: border-box;
+  height: 5rem;
+}
+
+#player > div {
+  display: inline-block;
+  height: 100%;
+}
+
+
+#player .image {
+  width: 10vw;
+  /* border: 1px solid blue; */
+  text-align: right;
+}
+
+#player .image img {
+  width: 60px;
+  height: 60px;
+  margin: 0;
+}
+
+#player .elem {
+  width: 60vw;
+  /* border: 1px solid yellow; */
+  padding-left: 0.2rem;
+}
+
+#player .controls {
+  width: 20vw;
+  vertical-align: top;
+  /* border: 1px solid green; */
+  font-size: 70px;
+  line-height: 70px;
+  text-align: center;
+  cursor: pointer;
+}
+
+
+#player audio {
+  /* width: 50vw; */
+  width: 100%;
+  height: 1rem;
+  margin-top: 0.3rem;
+}
+
+#player .artist-name {
+  font-size: 14pt;
+}
+#player .song-title {
+  font-size: 11pt;
+  font-style: italic;
 }
 
 #savedArtists {
@@ -73,7 +128,7 @@ header .playing > span {
 
 
 
-audio {
+xxxxaudio {
   /* width: 139%; ll*/
   max-width: 260px;
   /*ll*/
@@ -118,9 +173,17 @@ audio {
   /* border: 1px dashed orange; */
 } 
 
+.playerWrapper.playing {
+  border: 1px solid lightblue;
+}
+
+.playerWrapper.playing .artist{
+  font-color: lightblue;
+}
+
 /* single container for all */
 #players {
-  padding-top: 5rem;
+  padding-top: 7rem;
   padding-bottom: 3rem;
   /* padding-left: 1rem; */
 }
@@ -129,8 +192,14 @@ audio {
   display: inline-block;
 }
 
+.playerWrapper .artist {
+  vertical-align: top;
+}
+
 .playerWrapper .thumb {
-  width: 60px;
+  /* width: 60px; */
+  cursor: pointer;
+
   /* border: 1px solid red; */
 }
 
@@ -198,3 +267,14 @@ audio {
   right: -1rem !important;
   /* opacity: 0.5; */
 }
+
+
+
+@media only screen and (max-device-width: 480px) {
+
+  header {
+    padding: 0.4rem;
+  }
+
+
+} /* media screen max 480px */
