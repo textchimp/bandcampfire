@@ -1,5 +1,10 @@
 /*
 
+  random play error on mobile:
+  "Unhandled Promise Rejection: NotAllowedError: The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission." 
+  Line 220: randPlayer.play();
+  "You might encounter the error when there is an async operation between the user interaction and playing of audio." i.e. DOESN'T work for "expand new" random when a fetch() is involved
+
   Shortcuts:
     - 's'  (while playing) save artist to faves
     - shift + click (on song) open in new tab
@@ -35,7 +40,7 @@ const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
 const FORCE_RELOAD = params.get('nocache') !== null || false;  // reload ALL
-const APP_VERSION = 0.2;  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
+const APP_VERSION = '0.2.1';  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
 
 // const cors = 'http://localhost:9999/';
 const cors = 'https://corsproxy.io/?';
@@ -64,6 +69,61 @@ const controls = {
 };
 
 
+
+
+// Mobile swipe handler code
+// from https://stackoverflow.com/a/62825217
+
+const heading = $('header');
+
+heading.addEventListener('touchstart', function (event) {
+  touchstartX = event.changedTouches[0].screenX;
+  touchstartY = event.changedTouches[0].screenY;
+  event.preventDefault(); // no scrolling
+}, false);
+
+heading.addEventListener('touchend', function (event) {
+  touchendX = event.changedTouches[0].screenX;
+  touchendY = event.changedTouches[0].screenY;
+  handleGesture(event);
+}, false);
+
+
+function handleGesture(ev) {
+
+  const SWIPE_DISTANCE_THRESHOLD = window.innerWidth * 0.175;
+
+  const passedThreshold = Math.abs(touchendX - touchstartX) > SWIPE_DISTANCE_THRESHOLD;
+
+  if( !passedThreshold ) return;
+
+  if (touchendX < touchstartX) {
+    // alert('Swiped Left');
+  }
+
+  if (touchendX > touchstartX) {
+    // alert('Swiped Right');
+    advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
+  }
+
+
+  // These need fine-tuning to work well, i.e vert swipe must be N times larger than horiz, or vice versa
+
+  // if (touchendY < touchstartY) {
+  //   alert('Swiped Up');
+  // }
+
+  // if (touchendY > touchstartY) {
+  //   alert('Swiped Down');
+  // }
+
+  // if (touchendY === touchstartY) {
+  //   console.log('Tap');
+  // }
+
+} // handleGesture()
+
+// swipe
 
 
 // https://bobbyhadz.com/blog/javascript-wait-for-element-to-exist
@@ -140,6 +200,8 @@ function advanceTrack(ev, randomOrder=false){
         randomPlayer = players[Math.floor(players.length * Math.random())];
       }
       randomPlayer.play();
+      randomPlayer.scrollIntoView({ behavior: "smooth", inline: "nearest" });
+
     }
 
   } else {
@@ -210,12 +272,15 @@ async function loadRecPlayers(url, parent) {
     if (stored === null) throw new Error('Not found');
     data = JSON.parse( stored ); 
 
+    console.log( `%cPage data loaded from LS cache`, 'color:green' );
+
     // Force reload of cached LocalStorage data whenever version changes
     if ( FORCE_RELOAD || data.__version !== APP_VERSION) throw new Error('Old version, refetch');
   
   } catch( err ){
     console.warn('LS cache load issue for: ', url, err.message);
     data = await  parsePage( url ); // Load actual live data from Bandcamp
+    console.log(`%cPage data RE-FETCHED`, 'color:green' );
     if(!data){
       $('#mainTitle').innerHTML = `<span style="color: orange">Could not load URL ("${ url }")</span>`;
       return false;
@@ -226,6 +291,8 @@ async function loadRecPlayers(url, parent) {
   }
 
   const { artistName, tagsText, recs, albumTracks } = data;
+
+  // if( !artistName ) debugger;
 
   let nestingLevel = 0;
 
@@ -683,12 +750,21 @@ function renderSavedArtists( artists, parent='#savedArtists'){
 
 
 function loadSavedArtists(){
+  const defaultSavedTesting = { 
+  "L I T H I C S": "https: //lithics.bandcamp.com/album/tower-of-age", "Sweeping Promises": "https://sweepingpromises.bandcamp.com/album/hunger-for-a-way-out", "Black Country, New Road": "https://blackcountrynewroad.bandcamp.com/album/for-the-first-time", "black midi": "https://bmblackmidi.bandcamp.com/album/cavalcade", "METZ": "https://metz.bandcamp.com/album/atlas-vending", "Greys": "https://greys.bandcamp.com/album/warm-shadow", "Floatie": "https://floatiehq.bandcamp.com/album/voyage-out", "Sarah Davachi": "https://sarahdavachi.bandcamp.com/album/cantus-descant", "SVIN & Århus Sinfonietta": "https://svin.bandcamp.com/album/elegi", "Les Filles de Illighadad": "https://lesfillesdeillighadad.bandcamp.com/album/eghass-malan", "Michael Gordon & Cello Octet Amsterdam": "https://michaelgordonmusic.bandcamp.com/album/8", "Julia Wolfe": "https://juliawolfemusic.bandcamp.com/album/oxygen", "Hidden Orchestra": "https://hiddenorchestra.bandcamp.com/album/to-dream-is-to-forget", "Hammered Hulls": "https://hammeredhulls.bandcamp.com/album/careening", "Swan Wash": "https://swanwash.bandcamp.com/album/swan-wash" 
+  };
   try {
     // return {};
-    return JSON.parse(localStorage.getItem('saved'));
+    // return JSON.parse(localStorage.getItem('saved'));
+    const savedJson = localStorage.getItem('saved');
+    if( !savedJson ){
+      return defaultSavedTesting;
+    }
+    return JSON.parse(savedJson);
   } catch( err ){
     console.warn( `Could not load saved artists`, err );
-    return {};
+    // return {};
+    return defaultSavedTesting;
   }
 } // loadSavedArtists()
 
