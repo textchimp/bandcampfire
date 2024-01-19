@@ -1,6 +1,6 @@
-/*
 
-  random play error on mobile:
+/*
+  - random play error on mobile:
   "Unhandled Promise Rejection: NotAllowedError: The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission." 
   Line 220: randPlayer.play();
   "You might encounter the error when there is an async operation between the user interaction and playing of audio." i.e. DOESN'T work for "expand new" random when a fetch() is involved
@@ -11,6 +11,8 @@
 
 
   TODO:
+
+  - "Various Artists" as title - better handling? Use album name instead? Save to LS  uniquely (using album)?
 
   - toggle for 'play only expanded' vs 'all'
 
@@ -63,68 +65,19 @@ let currentSongTreeNode = songTree[startUrl];
 
 
 let controlsGui = null;
+
 const controls = {
   randomAdvance: true,
-  randomExpandNewProb: 1.0,
+  randomExpandNewProb: 0.5,
 };
 
 
 let mainAudioPlayer = $('#mainPlayer');
 
-// Mobile swipe handler code
-// from https://stackoverflow.com/a/62825217
+// from drag-from-edge touch events
+let startDragAtBorder = false;
 
-const heading = $('header');
-
-heading.addEventListener('touchstart', function (event) {
-  touchstartX = event.changedTouches[0].screenX;
-  touchstartY = event.changedTouches[0].screenY;
-  event.preventDefault(); // no scrolling
-}, false);
-
-heading.addEventListener('touchend', function (event) {
-  touchendX = event.changedTouches[0].screenX;
-  touchendY = event.changedTouches[0].screenY;
-  handleGesture(event);
-}, false);
-
-
-function handleGesture(ev) {
-
-  const SWIPE_DISTANCE_THRESHOLD = window.innerWidth * 0.175;
-
-  const passedThreshold = Math.abs(touchendX - touchstartX) > SWIPE_DISTANCE_THRESHOLD;
-
-  if( !passedThreshold ) return;
-
-  if (touchendX < touchstartX) {
-    // alert('Swiped Left');
-  }
-
-  if (touchendX > touchstartX) {
-    // alert('Swiped Right');
-    // advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
-  }
-
-
-  // These need fine-tuning to work well, i.e vert swipe must be N times larger than horiz, or vice versa
-
-  // if (touchendY < touchstartY) {
-  //   alert('Swiped Up');
-  // }
-
-  // if (touchendY > touchstartY) {
-  //   alert('Swiped Down');
-  // }
-
-  // if (touchendY === touchstartY) {
-  //   console.log('Tap');
-  // }
-
-} // handleGesture()
-
-// swipe
-
+let longPressAlbumArtTimer = null;
 
 // https://bobbyhadz.com/blog/javascript-wait-for-element-to-exist
 
@@ -155,13 +108,14 @@ function trunc(str, len=25){
 
 function audioPauseHandler(e){
   console.log(`audioPauseHandler()`);
-  e.target.closest('.player').classList.remove('playing');
-  $('header img').style.display = 'none';
+  // e.target.closest('.player').classList.remove('playing');
+  // $('header img').style.display = 'none';
 }
 
  function audioPlayHandler({target}) {
+  // TODO: broken
   console.log( `audioPlayHandler()` );
-  currentlyPlayingNode = target;
+  // currentlyPlayingNode = target;
   // $$('audio').forEach(el => el !== target && el.pause());
   console.log( `new play level:`, target.dataset.nestingLevel );
 
@@ -178,15 +132,14 @@ function audioPauseHandler(e){
   // target.closest('.player').classList.add('playing');
 
   const headerImg = $('header img');
-  console.log( `playing node:`, currentlyPlayingNode );
-  headerImg.src = currentlyPlayingNode.dataset.image;
+  // console.log( `playing node:`, currentlyPlayingNode );
+  // headerImg.src = currentlyPlayingNode.dataset.image;
   headerImg.style.display = 'inline';
 } //audioPlayHandler()
 
 function advanceTrack(randomOrder=false){
   // actually 'ended' event handler
-
-  // ev?.target?.closest('.player').classList.remove('playing');
+  console.log( `%cadvanceTrack()`, 'color: orange; font-weight: bold' );
 
   const players = $$('.playerWrapper');
   
@@ -202,6 +155,7 @@ function advanceTrack(randomOrder=false){
         randomPlayer = players[Math.floor(players.length * Math.random())];
       }
       // randomPlayer.play();
+      currentlyPlayingNode = randomPlayer;
       loadAudio( randomPlayer.dataset );
       $('.playing')?.classList.remove('playing');
       randomPlayer.classList.add('playing');
@@ -210,7 +164,29 @@ function advanceTrack(randomOrder=false){
     }
 
   } else {
-    // const justEnded = $$( 'audio' ).findIndex;
+    // Play next track in list
+
+    // TODO: copy this data to attribute of <audio> instead
+    const allPlayers = $$('.playerWrapper');
+
+    if( !mainAudioPlayer.src ){
+      //  No last-playing, play first in list
+      $('.playing')?.classList.remove('playing');
+      loadAudio(allPlayers[0].dataset);
+      allPlayers[0].classList.add('playing');
+      return;
+    }
+
+    let playingIndex = [...allPlayers].findIndex( p => p.dataset.audioSrc === mainAudioPlayer.src );
+    if( playingIndex >= 0 ){
+      if( playingIndex === allPlayers.length-1 ){
+        playingIndex = -1; // wrap
+      }
+      $('.playing')?.classList.remove('playing');
+      loadAudio( allPlayers[playingIndex+1].dataset );
+      allPlayers[playingIndex + 1].classList.add('playing');
+    }
+
   }
 } // advanceTrack()
 
@@ -226,6 +202,7 @@ async function quickNastyRandomExpand(){
 
   const players = childRecs.querySelectorAll('.playerWrapper');
   const randPlayer = players[Math.floor(Math.random() * players.length)];
+  currentlyPlayingNode = randPlayer;
   loadAudio( randPlayer.dataset );
   $('.playing')?.classList.remove('playing');
   randPlayer.classList.add('playing');
@@ -255,13 +232,23 @@ function playToggle(parent){
   // console.log( `playToggle`, parent.dataset, mainAudioPlayer );
 
   // Play if paused, or if clicked track is different to playing track
-  if( mainAudioPlayer.paused || mainAudioPlayer.src !== parent.dataset.audioSrc){
+  if( mainAudioPlayer.src == parent.dataset.audioSrc ){ 
+    // Unpause if same track
+    mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
+  } else {
+    currentlyPlayingNode = parent;
     loadAudio(parent.dataset);
     $('.playing')?.classList.remove('playing');
     parent.classList.add('playing');
-  } else {
-    mainAudioPlayer.pause();  
   }
+
+  // if( mainAudioPlayer.paused || mainAudioPlayer.src !== parent.dataset.audioSrc){
+  //   loadAudio(parent.dataset);
+  //   $('.playing')?.classList.remove('playing');
+  //   parent.classList.add('playing');
+  // } else {
+  //   mainAudioPlayer.pause();  
+  // }
 
 } // playToggle()
 
@@ -269,18 +256,23 @@ function loadAudio( args ){
   // mainAudioPlayer.firstElementChild.src = args.audioSrc;
   updatePlayerUi(args);
   mainAudioPlayer.src = args.audioSrc;
+  
   mainAudioPlayer.load();
   mainAudioPlayer.play();
+
+  // console.log( `current`, currentlyPlayingNode );
 } // loadAudio()
 
 function updatePlayerUi( args ){
-  $('#player .artist-name').innerHTML = args.artist;
+  $('#player .artist-name').innerHTML = trunc(args.artist, 40);
   
   // We only know the name of the track for album tracks, not recs
   $('#player .song-title').innerHTML = args.title || '(recommended track)';
   // $('#player .song-title').innerHTML = args.
 
   $('#player .image img').src = args.image;
+
+  document.title = `🔥 ${args.artist}` + (args.title ? ` - '${args.title}' ` : ''); // | BandcampFire
 
 } // updatePlayerUi()
 
@@ -346,7 +338,7 @@ async function loadRecPlayers(url, parent) {
     // nested
     parent.firstElementChild.remove(); // loading message
     // parent.style.display = 'block'; // unhide
-    console.log( `parent`, parent );
+    // console.log( `parent`, parent );
 
     // Album player
     // const parentPlayer = parent.parentElement.querySelector('audio'); 
@@ -393,12 +385,17 @@ function renderAlbumPlayer( tracks, parent ){
     currentIndex = (currentIndex + 1) % totalTracks;    
     player.innerHTML = `<div><a href="${parent.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
    
-    // parent.firstElementChild.src = tracks[currentIndex].audio;
-    // parent.load();
-    // parent.play();
-    // player.dataset.playing = true;
+    player.dataset.playing = true;
     e.target.classList.add('playing');
-    loadAudio( parent.dataset );
+
+    currentlyPlayingNode = parent; // TODO: won't get song title right! (Doesn't matter for artist save)
+    loadAudio({
+      artist: parent.dataset.artist,
+      title: (currentIndex + 1) + '. ' + tracks[currentIndex].title,
+      image: parent.dataset.image,
+      url: parent.dataset.url,
+      audioSrc: tracks[currentIndex].audio
+    }); 
     
   });
 
@@ -444,7 +441,7 @@ async function parsePage(url){
     const recData = pageMeta.recommendations_footer.album_recs;
     // console.log(`art`, recData);
     
-    const getArtUrl = (id, size = '6') => `https://f4.bcbits.com/img/a${id.toString().padStart(10, '0')}_${size}.jpg`; // '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail
+    const getArtUrl = (id, size = '5') => `https://f4.bcbits.com/img/a${id.toString().padStart(10, '0')}_${size}.jpg`; // '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail
     
     console.log(`recs BLOB`, pageMeta.recommendations_footer.album_recs[0] );
 
@@ -604,27 +601,13 @@ function recPlayerTemplate(match, level) {
     data-audio-src="${ match.audio }"
   >
   
-
     <div class="thumb">
-      <img class="album-image" src="${match.img}" title="">
+      <a href="${match.albumUrl}" target="_blank" title="(Use context menu to open album page in new tab)">
+        <img class="album-image" src="${match.img}" title="">
+      </a>
       <span class="artist">${trunc(match.artist)}</span>
     </div>
 
-
-    <!--
-    <div class="player">
-      <label class="artist">${trunc(match.artist)}</label>
-      <audio controls 
-        data-url="${match.albumUrl}" 
-        data-artist="${match.artist}"
-        data-image="${match.img}" 
-        data-nesting-level="${level}"
-      >
-        <source src=${ match.audio }>
-      </audio>
-    </div>
-    -->
-    
     <div class="follow">
       <span class="opener" data-loaded="false">⤵︎</span>
     </div>
@@ -641,41 +624,49 @@ function recPlayerTemplate(match, level) {
   `;
 }
 
-function attachAudioHandlers(to){
-  to.querySelectorAll('audio').forEach(a => {
-    a.addEventListener('play', audioPlayHandler);
-    a.addEventListener('ended', advanceTrack);
-    a.addEventListener('pause', audioPauseHandler);
-  }); // each audio
-} // attachAudioHandlers()
+
+// function attachAudioHandlers(to){
+//   to.querySelectorAll('audio').forEach(a => {
+//     a.addEventListener('play', audioPlayHandler);
+//     a.addEventListener('ended', advanceTrack);
+//     a.addEventListener('pause', audioPauseHandler);
+//   }); // each audio
+// } // attachAudioHandlers()
+
 
 function initHandlers() {
 
-  // Using event delegation so these only need to be attached once on load
-  // (Audio event handlers don't bubble and thus are added to each 
-  // element after creation in loadRecPlayers())
+  initMobileHandlers();
 
+  // Using event delegation so these only need to be attached once on load
   document.addEventListener('click', async e => {
     
     const {target} = e;
     
     console.log( `CLICK`, target.className );
+    // alert(target.className)
 
-    // Pause toggle for band/song name/album art in header
     // TODO: these don't need to be in the delegated click handler
-    if( target.className === 'controls' ){
-      advanceTrack();
-    }
+    // Pause toggle for band/song name/album art in header
+    // if( target.className === 'controls' ){
+    //   advanceTrack();
+    // }
 
-    if (['artist-name', 'song-title', 'header-album-image'].includes(target.className) ){
+    // , 'header-album-image'
+    if (['artist-name', 'song-title'].includes(target.className) ){
       return playToggle(); // no arg to just pause/play
     }
+
+    // end remove-TODO
 
 
 
     // Click thumbnail or band name to toggle play
     if( ['artist', 'thumb', 'album-image'].includes(target.className) ){
-      return playOrOpen( e, e.target.closest('.playerWrapper') );
+      playOrOpen( e, e.target.closest('.playerWrapper') );
+        e.stopPropagation(); // prevent link click (need to use context menu)
+        e.preventDefault();
+        return;
     }
 
     // // Click thumbnail or band name to toggle play
@@ -738,29 +729,38 @@ function initHandlers() {
     console.log(`key`, e.code);
     if (e.code === 'Space') {
       e.preventDefault();
-      if (currentlyPlayingNode) {
-        currentlyPlayingNode.pause();
-        lastPlayingNode = currentlyPlayingNode;
-        currentlyPlayingNode = null;
+      
+      if( mainAudioPlayer.src ){
+        mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
       } else {
-        if (lastPlayingNode) {
-          lastPlayingNode.play();
-          currentlyPlayingNode = lastPlayingNode;
-          return;
-        }
-        // $$('audio')?.play();
-        const players = $$('audio');
-        const rand = players[Math.floor(players.length * Math.random())];
-        rand.play();
-        currentlyPlayingNode = rand;
+        // TODO: Choose random to start
       }
+
+      //   mainAudioPlayer.pause();
+      //   lastPlayingNode = currentlyPlayingNode;
+      //   currentlyPlayingNode = null;
+      // } else {
+      //   if (lastPlayingNode) {
+      //     lastPlayingNode.play();
+      //     currentlyPlayingNode = lastPlayingNode;
+      //     return;
+      //   }
+      //   // $$('audio')?.play();
+      //   // TODO: play rand on space
+      //   // const players = $$('.playerWrapper');
+      //   // const rand = players[Math.floor(players.length * Math.random())];
+      //   // rand.play();
+      //   // currentlyPlayingNode = rand;
+      // }
+
+
     } else if (e.code === 'ArrowRight') {
       console.log(`Right`);
       e.preventDefault();
     } else if (e.code == 'BracketRight') {
       userAdvanceTrack();
     } else if (e.code == 'Period') {
-      advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
+      advanceTrack(); // actually to get random order
     } else if (e.code == 'Slash') {
       // console.log( `Jump 33% current track` );
       currentlyPlayingNode.currentTime += (currentlyPlayingNode.duration / 4.0);
@@ -778,7 +778,8 @@ function initHandlers() {
   navigator.mediaSession.setActionHandler('nexttrack', function (ev) {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log(`MEDIA NEXT`, ev);
-    userAdvanceTrack();
+    // userAdvanceTrack(); // literal next track: TODO
+    advanceTrack();                    
   });
 
   window.addEventListener("paste", (event) => {
@@ -789,13 +790,215 @@ function initHandlers() {
     }
   });
 
-  mainAudioPlayer.addEventListener('play', audioPlayHandler);
+  // mainAudioPlayer.addEventListener('play', audioPlayHandler); // not really working?
+  // TODO: use updatePlayerUi ??
   mainAudioPlayer.addEventListener('ended', advanceTrack);
   mainAudioPlayer.addEventListener('pause', audioPauseHandler);
 
 } // initHandlers()
 
+
+function initMobileHandlers(){
+
+  // mobile events
+
+  const headerImg = $('#player .image img');
+
+
+  // headerImg.addEventListener('touchstart', e => {
+  //   if(!longPressAlbumArtTimer){
+  //     longPressAlbumArtTimer = setTimeout(()=>{
+  //       // confirm('Save?');  
+  //       alert(1)
+  //     }, 1000);
+  //   }
+  // });
+  // headerImg.addEventListener('touchend', e => {
+  //   if(longPressAlbumArtTimer){
+  //     clearTimeout(longPressAlbumArtTimer);
+  //     longPressAlbumArtTimer = null;
+  //     e.preventDefault();
+  //   }
+  // });
+
+  // const headerImgEvents = new Hammer(headerImg, {});
+  // headerImgEvents.on('doubletap', function (ev) {
+  //   // console.log(ev);
+  //   alert('double!');
+  // });
+  // headerImgEvents.on('tap', function (ev) {
+  //   // console.log(ev);
+  //   playToggle();
+  // });
+
+
+
+  // We create a manager object, which is the same as Hammer(), but without the preset recognizers. 
+  var mc = new Hammer.Manager(headerImg);
+  // Tap recognizer with minimal 2 taps
+  // (from https://codepen.io/jtangelder/pen/xxYyJQ) via Examples page
+  mc.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
+  // Single tap recognizer
+  mc.add(new Hammer.Tap({ event: 'singletap' }));
+  mc.add(new Hammer.Press({ event: 'longpress', time: 1000 }));
+
+  // mc.add(new Hammer.Swipe({ event: 'swipe' }));
+  // mc.on('swipe', e => alert('swipe down'));
+
+  mc.get('doubletap').recognizeWith('singletap');
+  mc.get('singletap').requireFailure('doubletap');
+
+  mc.on('singletap', e => {
+    playToggle(); // Causes slight delay before single tap recognised (due to double check)
+  });
+
+  mc.on('doubletap', e => {
+    if (confirm('Save artist?')) {
+      saveArtist(currentlyPlayingNode.dataset);
+    }
+  });
+
+  // const windowReference = window.open();
+  mc.on('longpress', e => {
+    // if(confirm('Visit band page?')){
+    // if( currentlyPlayingNode ){
+    // window.open(currentlyPlayingNode.dataset.url, '_blank');
+    // windowReference.location = currentlyPlayingNode.dataset.url;
+    // }
+    // openMenu();
+    e.preventDefault();
+  });
+
+
+  // mc.on("singletap doubletap", function (ev) {
+  //   alert(ev.type)
+  // });
+
+
+  // 'Next' button (toggle mode with long press) // TODO: swipe down?
+  const nextBtnManager = new Hammer.Manager($('#player .controls'));
+  // nextBtnManager.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
+  nextBtnManager.add(new Hammer.Tap({ event: 'singletap' }));
+  nextBtnManager.add(new Hammer.Press({ event: 'longpress', time: 1000 }));
+  // nextBtnManager.get('doubletap').recognizeWith('singletap');
+  // nextBtnManager.get('singletap').requireFailure('doubletap');
+
+  nextBtnManager.on('singletap', () => advanceTrack());
+
+  nextBtnManager.on('longpress', e => {
+    controls.randomAdvance = !controls.randomAdvance;
+    e.target.dataset.advanceMode = controls.randomAdvance; // need this?
+    e.target.innerHTML = controls.randomAdvance ? '↬' : '↦';
+  });
+
+
+  $('#player .artist-name').addEventListener('touchstart', (e) => {
+    playToggle();
+    e.preventDefault();
+  });
+
+  // We only know the name of the track for album tracks, not recs
+  $('#player .song-title').addEventListener('touchstart', (e) => {
+    playToggle();
+    e.preventDefault();
+  });
+
+  // $('#player .image img').addEventListener('touchstart', playToggle);
+  // $('#player .controls').addEventListener('touchstart', advanceTrack);
+
+  // Down swipe from top right edge to open dat.gui control panel
+  /* Not used for now, swipe gesture still a bit funny
+  document.addEventListener('touchstart', function (e) {
+    // var yPos = e.originalEvent.touches[0].pageY;
+    startDragAtBorder = e.changedTouches[0].pageY < 50 && e.changedTouches[0].pageX > (window.innerWidth * 0.7);
+    // alert( startDragAtBorder );
+  }); // touchstart
+  document.addEventListener('touchend', function (e) {
+    if(
+      startDragAtBorder && e.changedTouches[0].pageY > 50 && 
+      e.changedTouches[0].pageY < (window.innerHeight/3)
+    ){
+      // alert('edge down swipe!');
+      controlsGui.toggleHide();
+      if( !controlsGui.isHidden() ){
+        controlsGui.open();
+      } 
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }); // touchend
+  */
+
+
+
+  // Mobile swipe handler code
+  // from https://stackoverflow.com/a/62825217
+
+  // const heading = $('header');
+
+  // heading.addEventListener('touchstart', function (event) {
+  //   touchstartX = event.changedTouches[0].screenX;
+  //   touchstartY = event.changedTouches[0].screenY;
+  //   event.preventDefault(); // no scrolling
+  // }, false);
+
+  // heading.addEventListener('touchend', function (event) {
+  //   touchendX = event.changedTouches[0].screenX;
+  //   touchendY = event.changedTouches[0].screenY;
+  //   handleGesture(event);
+  // }, false);
+
+
+} // initMobileHandlers()
+
+
+// function handleGesture(ev) {
+//   if (ev.target.nodeName === 'AUDIO') {
+//     ev.stopPropagation();
+//     return;
+//   }
+
+//   const SWIPE_DISTANCE_THRESHOLD = window.innerWidth * 0.175;
+
+//   const passedThreshold = Math.abs(touchendX - touchstartX) > SWIPE_DISTANCE_THRESHOLD;
+
+//   if (!passedThreshold) return;
+
+//   if (touchendX < touchstartX) {
+//     // alert('Swiped Left');
+//   }
+
+//   if (touchendX > touchstartX) {
+//     // alert('Swiped Right');
+//     advanceTrack({ target: currentlyPlayingNode }); // actually to get random order
+//   }
+
+
+//   // These need fine-tuning to work well, i.e vert swipe must be N times larger than horiz, or vice versa
+
+//   // if (touchendY < touchstartY) {
+//   //   alert('Swiped Up');
+//   // }
+
+//   // if (touchendY > touchstartY) {
+//   //   alert('Swiped Down');
+//   // }
+
+//   // if (touchendY === touchstartY) {
+//   //   console.log('Tap');
+//   // }
+
+// } // handleGesture()
+
+// swipe
+
+
 // Start the process 
+
+
+function openMenu(){
+  $('#menu').classList.toggle('open');  
+} // openMenu()
 
 async function init() {
   // if( !loadBodyFromCache(startUrl) ){
@@ -804,6 +1007,12 @@ async function init() {
   initHandlers();
   renderSavedArtists(savedArtists);
 
+  // initControlPanel(); // Not using for now
+
+}; // init()
+
+function initControlPanel(){
+
   controlsGui = new dat.GUI(); //({ closed: true });
   const randomFolder = controlsGui.addFolder('Random');
   randomFolder.add(controls, 'randomAdvance').name('Random Next');
@@ -811,8 +1020,9 @@ async function init() {
   randomFolder.open();
 
   controlsGui.close();
-  // controlsGui.hide();
-};
+  controlsGui.toggleHide(true); // force hide
+
+} // initControlPanel()
 
 function renderSavedArtists( artists, parent='#savedArtists'){
    // TODO: display in order-added

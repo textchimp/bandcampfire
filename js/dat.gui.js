@@ -3065,8 +3065,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	  }
 	};
 	
-	GUI.toggleHide = function () {
-	  hide = !hide;
+	GUI.toggleHide = function (force=null) {
+	  hide = force !== null ? force : !hide; // lukeh
 	  _common2.default.each(hideableGuis, function (gui) {
 	    gui.domElement.style.display = hide ? 'none' : '';
 	  });
@@ -3196,6 +3196,14 @@ return /******/ (function(modules) { // webpackBootstrap
 	  close: function close() {
 	    this.closed = true;
 	  },
+
+		toggleHide: function toggleHide(){
+			GUI.toggleHide(); // lukeh
+		},
+
+		isHidden: function isHidden() {
+			return hide; // lukeh
+		},
 	
 	  onResize: function onResize() {
 	    // we debounce this function to prevent performance issues when rotating on tablet/mobile

@@ -8,6 +8,7 @@ body {
 }
 
 header, footer {
+  overscroll-behavior: none;
   box-sizing: border-box;
   position: fixed;
   background-color: rgba(20,20,20,1);
@@ -20,6 +21,7 @@ header, footer {
 
 header {
   top: 0;
+  height: 6rem;
 }
 
 footer {
@@ -28,12 +30,6 @@ footer {
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
 }
-
-header h3 {
-  display: inline-block;
-  width: 89%;
-}
-
 
 header .playing > span {
   font-weight: normal;
@@ -45,7 +41,7 @@ header .playing > span {
   /* width: calc(100% - 2rem); */
   /* border: 1px solid red; */
   box-sizing: border-box;
-  height: 5rem;
+  height: 100%;
 }
 
 #player > div {
@@ -55,15 +51,20 @@ header .playing > span {
 
 
 #player .image {
-  width: 10vw;
+  width: 15vw;
+  height: 100%;
   /* border: 1px solid blue; */
   text-align: right;
+  vertical-align: top;
 }
 
 #player .image img {
-  width: 60px;
-  height: 60px;
+  width: 80px;
+  height: 80px;
+  /* width: 100%; */
   margin: 0;
+  /* vertical-align: middle; */
+  user-select: none; /* prevent mobile context menu ...nope! */
 }
 
 #player .elem {
@@ -73,10 +74,11 @@ header .playing > span {
 }
 
 #player .controls {
-  width: 20vw;
+  width: 15vw;
   vertical-align: top;
   /* border: 1px solid green; */
   font-size: 70px;
+  font-weight: lighter;
   line-height: 70px;
   text-align: center;
   cursor: pointer;
@@ -97,6 +99,11 @@ header .playing > span {
   font-size: 11pt;
   font-style: italic;
 }
+
+#player .artist-name, #player .song-title, #player .image img {
+  cursor: pointer;
+}
+
 
 #savedArtists {
   height: fit-content;
@@ -168,7 +175,8 @@ xxxxaudio {
   height: fit-content;
   width: fit-content;
   padding-left: 1rem;
-  width: 420px;
+  white-space: nowrap;
+  min-width: 50vw;
   margin-bottom: 0.3rem;
   /* border: 1px dashed orange; */
 } 
@@ -178,7 +186,8 @@ xxxxaudio {
 }
 
 .playerWrapper.playing .artist{
-  font-color: lightblue;
+  color: lightblue;
+  font-weight: 500;
 }
 
 /* single container for all */
@@ -186,6 +195,7 @@ xxxxaudio {
   padding-top: 7rem;
   padding-bottom: 3rem;
   /* padding-left: 1rem; */
+  overscroll-behavior: none;
 }
 
 .playerWrapper > * {
@@ -199,8 +209,11 @@ xxxxaudio {
 .playerWrapper .thumb {
   /* width: 60px; */
   cursor: pointer;
-
   /* border: 1px solid red; */
+}
+
+.playerWrapper .thumb a{
+  text-decoration: none;
 }
 
 .playerWrapper .thumb img {
@@ -276,5 +289,34 @@ xxxxaudio {
     padding: 0.4rem;
   }
 
+  #player .artist-name {
+    font-weight: 500;
+  }
+
+  footer {
+    max-height: 2rem;
+    overflow-y: scroll;
+  }
+
+  .playerWrapper .artist {
+    /* vertical-align: top; */
+    font-size: 1.2rem;
+  }
 
 } /* media screen max 480px */
+
+#menu {
+  display: none;
+  border: 1px solid red;
+  width: 50vw;
+  height: 50vh;
+  position: absolute;
+  right: 0;
+  top: 6rem;
+  background: rgb(30, 30, 30);
+
+}
+
+#menu.open {
+  display: inline-block;
+}

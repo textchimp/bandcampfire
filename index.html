@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BandcampFire</title>
   <link rel="stylesheet" href="css/style.css">
-  <script src="js/dat.gui.js"></script>
+  <!-- <script src="js/dat.gui.js"></script> -->
+  <script src="js/hammer.min.js"></script>
   <script src="js/main.js" defer></script>
 </head>
 <body>
@@ -18,7 +19,7 @@
       <div class="song-title"></div>
       <audio id="mainPlayer" controls></audio>
     </div>
-    <div class="controls">⇨</div>
+    <div class="controls" data-advance-mode="random">↬</div> <!-- ⇨ ↬ ☈ → -->
     <div class="image">
       <img class="header-album-image" src="http://placekitten.com/50/50">
     </div>
@@ -26,10 +27,13 @@
 
 </header>
 
+<div id="menu">
+<a href="" id=""></a>
+</div>
+
 <div id="players"></div>
 
 <footer>
-  <!-- <button onclick="advanceTrack({ target: currentlyPlayingNode });">NEXT</button> -->
   <div id="savedArtists">
     <span>Saved:</span>
     <span class="savedList">Press '<span style="color: white; font-size: 14pt">s</span>' while playing to save an artist to this list.</span>
