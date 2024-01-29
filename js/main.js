@@ -530,9 +530,15 @@ async function getAlbumUrlFromLabelPage(urlEnc){
   // const parser = new DOMParser();
   // const pageDom = parser.parseFromString(data, 'text/html');
   const albumPath = data.split('id="music-grid"')[1].split('a href="')[1].split('"')[0];
-
+  // console.log( `albumPath`, albumPath );
   // Need to decode because full URL is used for cache key (and encoded again for page load+parse)
-  return decodeURIComponent(urlEnc) + albumPath;
+  if( albumPath.startsWith('https://') ){
+    return albumPath;
+  } else {
+    return decodeURIComponent(urlEnc) + albumPath;
+  }
+
+
 } // getAlbumUrlFromLabelPage()
 
 
