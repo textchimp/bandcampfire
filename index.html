@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- user-scalable=no  prevent zooming on form fields -->
   <title>BandcampFire</title>
   <link rel="stylesheet" href="css/style.css">
   <!-- <script src="js/dat.gui.js"></script> -->
@@ -11,12 +12,16 @@
 </head>
 <body>
 
-<header>
+<header class="device-fixed-width device-fixed-height">
 
   <div id="player">
     <div class="elem">
-      <div class="artist-name"></div>
-      <div class="song-title"></div>
+      
+      <div id="playerDetails">
+        <div class="artist-name"></div>
+        <div class="song-title"></div>
+      </div>
+
       <audio id="mainPlayer" controls></audio>
     </div>
     <div class="controls" data-advance-mode="random">↬</div> <!-- ⇨ ↬ ☈ → -->
@@ -27,14 +32,40 @@
 
 </header>
 
-<div id="menu">
-<a href="" id=""></a>
+<div id="searchResults" class="">
+  <div class="searchForm">
+    <span>
+      <input type="search" placeholder="Search..." id="searchText" value="floati">
+    </span>
+    <span id="closeSearchResults">close</span>
+  </div> 
+  <div class="results"></div>
 </div>
 
-<div id="players"></div>
+<div id="menu">
+<ul>
+  <li onclick="showSearchPanel();">
+    Search
+  </li>
+  <li onclick="currentlyPlayingNode?.scrollIntoView();">
+    Show in Tree
+  </li>  
+</ul>
+
+</div>
+
+<div id="players">
+  <div class="loading">Loading...</div>
+</div>
 
 <footer>
+  <div id="search">
+
+    
+  </div>
+  
   <div id="savedArtists">
+    <!-- <button id="searchButton">search</button>  -->
     <span>Saved:</span>
     <span class="savedList">Press '<span style="color: white; font-size: 14pt">s</span>' while playing to save an artist to this list.</span>
   </div>

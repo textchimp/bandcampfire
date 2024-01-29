@@ -1,5 +1,8 @@
 
 /*
+
+  - album play
+
   - random play error on mobile:
   "Unhandled Promise Rejection: NotAllowedError: The request is not allowed by the user agent or the platform in the current context, possibly because the user denied permission." 
   Line 220: randPlayer.play();
@@ -11,6 +14,13 @@
 
 
   TODO:
+
+  - search
+  curl -X POST -H 'Content-Type: application/json' -d '{ "search_text":"floatie","full_page":false,"search_filter":""  }' https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic
+  search_filter: "b" for artist
+  search_filter: "a" for album
+  search_filter: "t" for track
+
 
   - "Various Artists" as title - better handling? Use album name instead? Save to LS  uniquely (using album)?
 
@@ -42,10 +52,16 @@ const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
 const FORCE_RELOAD = params.get('nocache') !== null || false;  // reload ALL
-const APP_VERSION = '0.2.1';  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
+const APP_VERSION = '0.2.2';  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
 
 // const cors = 'http://localhost:9999/';
-const cors = 'https://corsproxy.io/?';
+const CORS_PROXY_URL = 'https://corsproxy.io/?';
+
+// let REDIRECT_PROXY_URL = 'http://127.0.0.1:5001/functions-test-24b29/us-central1/getRedirect?k=allo&url=';
+// if (navigator.userAgent.includes('Mobi')) {
+  const REDIRECT_PROXY_URL = 'https://us-central1-functions-test-24b29.cloudfunctions.net/getRedirect?k=allo&url=';
+// } // mobile-only
+
 
 // helpers
 // Object.prototype.l = function (x) {console.log('log:', this); return this; };
@@ -55,7 +71,9 @@ const $$ = document.querySelectorAll.bind(document);
 
 let baseElement = null;
 let currentlyPlayingNode = null;
-// let lastPlayingNode = null;
+let lastPlayingNode = null;
+const playHistory = []; // TODO
+let playingAlbumTrack = null;  // !== null means it's album play mode
 
 let savedArtists = loadSavedArtists();
 // console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
@@ -74,13 +92,23 @@ const controls = {
 
 let mainAudioPlayer = $('#mainPlayer');
 
+const headerNode = $('header');
+
 // from drag-from-edge touch events
 let startDragAtBorder = false;
 
 let longPressAlbumArtTimer = null;
 
-// https://bobbyhadz.com/blog/javascript-wait-for-element-to-exist
+const getArtUrl = (id, size = '5', pad=true) => {
+  const paddedId = pad ? id.toString().padStart(10, '0') : id;
+  return `https://f4.bcbits.com/img/a${paddedId}_${size}.jpg`; 
+};
+// '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail // 16 is good! full screen but not original max size
 
+
+
+
+// https://bobbyhadz.com/blog/javascript-wait-for-element-to-exist
 function waitForElementToExistAt(selector, node) {
   return new Promise(resolve => {
     if (node.querySelector(selector)) {
@@ -137,11 +165,45 @@ function audioPauseHandler(e){
   headerImg.style.display = 'inline';
 } //audioPlayHandler()
 
+
+function trackEnded(){
+  // Track reached a natural end - add to recently played list
+  // TODO: what about when you skip a track? Shouldn't this also add
+  // TODO    to recently-played?
+  advanceTrack();
+  console.log(`track end:`, Date.now() );
+} // trackEnded()
+
+
+function previousTrack(){
+  // alert('prev');
+  console.log( `previousTrack()` );
+  if( !lastPlayingNode ) return;
+  let tempCurrent = currentlyPlayingNode;
+  currentlyPlayingNode = lastPlayingNode;
+  lastPlayingNode = tempCurrent; // TODO: this just toggles back and forth; create array and move through it instead
+  loadAudio(currentlyPlayingNode.dataset);
+  $('.playing')?.classList.remove('playing');
+  currentlyPlayingNode.classList.add('playing');
+  currentlyPlayingNode.scrollIntoView({ behavior: "smooth", inline: "nearest" });
+
+} // previousTrack()
+
 function advanceTrack(randomOrder=false){
   // actually 'ended' event handler
   console.log( `%cadvanceTrack()`, 'color: orange; font-weight: bold' );
 
   const players = $$('.playerWrapper');
+
+  if( playingAlbumTrack !== null ){
+    // inc track
+    // playingAlbumTrack.currentIndex = ();
+
+    const alb = playingAlbumTrack;
+    alb.currentIndex = (alb.currentIndex + 1) % alb.tracks.length;
+    playAlbumTrack( alb.tracks[alb.currentIndex], alb.currentIndex, alb.parent );
+    return;
+  }
   
   if( controls.randomAdvance || randomOrder ){
 
@@ -155,6 +217,7 @@ function advanceTrack(randomOrder=false){
         randomPlayer = players[Math.floor(players.length * Math.random())];
       }
       // randomPlayer.play();
+      lastPlayingNode = currentlyPlayingNode;
       currentlyPlayingNode = randomPlayer;
       loadAudio( randomPlayer.dataset );
       $('.playing')?.classList.remove('playing');
@@ -185,6 +248,8 @@ function advanceTrack(randomOrder=false){
       $('.playing')?.classList.remove('playing');
       loadAudio( allPlayers[playingIndex+1].dataset );
       allPlayers[playingIndex + 1].classList.add('playing');
+      lastPlayingNode = currentlyPlayingNode;
+      currentlyPlayingNode = allPlayers[playingIndex + 1];
     }
 
   }
@@ -202,6 +267,7 @@ async function quickNastyRandomExpand(){
 
   const players = childRecs.querySelectorAll('.playerWrapper');
   const randPlayer = players[Math.floor(Math.random() * players.length)];
+  lastPlayingNode = currentlyPlayingNode;
   currentlyPlayingNode = randPlayer;
   loadAudio( randPlayer.dataset );
   $('.playing')?.classList.remove('playing');
@@ -236,6 +302,7 @@ function playToggle(parent){
     // Unpause if same track
     mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
   } else {
+    lastPlayingNode = currentlyPlayingNode;
     currentlyPlayingNode = parent;
     loadAudio(parent.dataset);
     $('.playing')?.classList.remove('playing');
@@ -290,6 +357,9 @@ function playOrOpen(ev, parent) {
 async function loadRecPlayers(url, parent) {
 
   let isBase = false;
+
+  // console.log( `baseElement`, baseElement );
+
   if( baseElement === null ){
     baseElement = parent; // remember
     isBase = true;
@@ -302,6 +372,7 @@ async function loadRecPlayers(url, parent) {
   }
 
   let data = null;
+
   try {
     const stored = localStorage.getItem(url);
     if (stored === null) throw new Error('Not found');
@@ -313,8 +384,8 @@ async function loadRecPlayers(url, parent) {
     if ( FORCE_RELOAD || data.__version !== APP_VERSION) throw new Error('Old version, refetch');
   
   } catch( err ){
-    console.warn('LS cache load issue for: ', url, err.message);
-    data = await  parsePage( url ); // Load actual live data from Bandcamp
+    console.log('LS cache load: ', err.message, url);
+    data = await parsePage( url ); // Load actual live data from Bandcamp
     console.log(`%cPage data RE-FETCHED`, 'color:green' );
     if(!data){
       // $('#mainTitle').innerHTML = `<span style="color: orange">Could not load URL ("${ url }")</span>`;
@@ -325,24 +396,56 @@ async function loadRecPlayers(url, parent) {
     localStore( url, data );
   }
 
-  const { artistName, tagsText, recs, albumTracks } = data;
+  const { artistName, tagsText, recs, albumTracks, imageUrl } = data;
+  console.log( `loadRecPlayers() data`, data );
 
   // if( !artistName ) debugger;
 
   let nestingLevel = 0;
 
-  if( isBase ){
+  // if( isBase ){} else {}
+
+  if( false ){  // isBase
     // $('#mainTitle').innerHTML = `<span>${trunc(artistName)}</span>`;
-    $('#player .artist-name').innerHTML = trunc(artistName, 40);
   } else {
+    $('#player .artist-name').innerHTML = trunc(artistName, 40);
     // nested
-    parent.firstElementChild.remove(); // loading message
-    // parent.style.display = 'block'; // unhide
-    // console.log( `parent`, parent );
+
+    $('#player .image > img').src = imageUrl;
+
+    // parent.firstElementChild.remove(); // loading message
+    parent.replaceChildren('');
 
     // Album player
     // const parentPlayer = parent.parentElement.querySelector('audio'); 
-    parent.appendChild( renderAlbumPlayer(albumTracks, parent.parentElement) ); // args is .playerWrapper with data attribs
+    // TODO: doesn't work because parent .playerWrapper is missing for attribs? Add dummy?
+
+    // for base: parent (#players)
+    // for nested; parent.parentElement (.playerWrapper)
+
+    if( isBase ){
+      // To make album player work for top-level band
+      parent.dataset.artist = artistName;
+      parent.dataset.image = imageUrl;
+      parent.dataset.url = url;
+      parent.dataset.nestingLevel = 0;  // or should just be .nesting ?
+      parent.dataset.audioSrc = albumTracks[0].audio;
+
+      // Make play button have a default to work with on top-level band
+      // (first song from album)
+      mainAudioPlayer.src = albumTracks[0].audio;
+      $('#player .song-title').innerHTML = albumTracks[0].title;
+      // alert(1)
+
+      // To make "save artist" work
+      currentlyPlayingNode = parent;
+    }
+
+  // console.log( `albumTracks`, albumTracks );
+
+    const albumParent = isBase ? parent : parent.parentElement;
+    // console.log( `parent elem for album`, albumParent );
+    parent.appendChild( renderAlbumPlayer(albumTracks, albumParent) ); 
     
     // Tags list
     parent.appendChild( renderTags(tagsText) );
@@ -354,8 +457,6 @@ async function loadRecPlayers(url, parent) {
   playersNode.className = 'players';
   playersNode.innerHTML += recs.map( r => recPlayerTemplate(r, nestingLevel) ).join('');
   parent.appendChild(playersNode);
-
-  // attachAudioHandlers(parent);
 
   // Update tree
   recs.forEach( r => {
@@ -383,40 +484,113 @@ function renderAlbumPlayer( tracks, parent ){
   player.innerHTML = `<div><a href="${parent.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>1/${totalTracks}. ${tracks[0].title}</span></div>`;
   player.addEventListener('click', e => {
     currentIndex = (currentIndex + 1) % totalTracks;    
+    
+    playingAlbumTrack = {tracks, currentIndex, parent};
+
     player.innerHTML = `<div><a href="${parent.dataset.url}" target="_new" title="Open in new tab">Album:</a> <span>${currentIndex + 1}/${totalTracks}. ${tracks[currentIndex].title}</span></div>`;
    
     player.dataset.playing = true;
     e.target.classList.add('playing');
 
-    currentlyPlayingNode = parent; // TODO: won't get song title right! (Doesn't matter for artist save)
-    loadAudio({
-      artist: parent.dataset.artist,
-      title: (currentIndex + 1) + '. ' + tracks[currentIndex].title,
-      image: parent.dataset.image,
-      url: parent.dataset.url,
-      audioSrc: tracks[currentIndex].audio
-    }); 
+    playAlbumTrack( tracks[currentIndex], currentIndex, parent );
     
   });
 
   return player;
 } // renderAlbumPlayer()
 
+function udpateAlbumPlayerUi(player){
+} // udpateAlbumPlayerUi()
+
+function playAlbumTrack(track, index, parent){
+  console.log( `playAlbumTrack`, {track, index, parent} );
+  currentlyPlayingNode = parent; // TODO: won't get song title right! (Doesn't matter for artist save)
+  loadAudio({
+    artist: parent.dataset.artist,
+    title: (index + 1) + '. ' + track.title,
+    image: parent.dataset.image,
+    url: parent.dataset.url,
+    audioSrc: track.audio
+  });
+
+} // playAlbumTrack()
+
+
+async function getAlbumUrlFromLabelPage(urlEnc){
+  
+  $('#players').innerHTML = '<div class="loading">Loading album from label...</div>';
+
+  try {
+    data = await (await fetch(CORS_PROXY_URL + urlEnc)).text();
+  } catch (error) {
+    console.log(`getAlbumUrlFromLabelPage(): Bad URL?`, CORS_PROXY_URL + urlEnc);
+    return null;
+  }
+
+  // const parser = new DOMParser();
+  // const pageDom = parser.parseFromString(data, 'text/html');
+  const albumPath = data.split('id="music-grid"')[1].split('a href="')[1].split('"')[0];
+
+  // Need to decode because full URL is used for cache key (and encoded again for page load+parse)
+  return decodeURIComponent(urlEnc) + albumPath;
+} // getAlbumUrlFromLabelPage()
+
+
+async function getRedirectedAlbumPage(urlEnc){
+  // TODO: gotta be a way to do this that doesn't require
+  // TODO:  server-side code/cloud function; but CORS blocks everything?
+
+  // Special case handling for search result URLs,
+  // (which are just a domain with no path to an album)
+  // since they are just the host/domain with no path
+  // and always trigger a 303 rediret to an album from
+  // bandcamp
+
+  // corsChoice = 'http://www.whateverorigin.org/get?url='; // SOMETIMES
+  // corsChoice = 'https://api.allorigins.win/get?url='; // works SOMETIMES
+
+  let newUrl;
+  
+  try {
+    const res = await fetch(REDIRECT_PROXY_URL + urlEnc);
+
+    if( res.status === 422 ){
+      // this page did not redirect, i.e. it is a label
+      // page (just albums, no songs directly);
+      // load it and scrape the first album from the list
+      newUrl = await getAlbumUrlFromLabelPage(urlEnc);
+    } else {
+      // Standard redirect, body text is new URL
+      newUrl = await res.text();
+    }
+    
+    console.log( `getRedirectedAlbumPage():` );
+    console.log( `old:`, urlEnc );
+    console.log( `new:`, newUrl );
+    return newUrl;
+  } catch (error) {
+    console.log( `Redirect URL fetch error:`, error );
+    // alert(`get redirect failed: ${error.message}`)
+    throw 'Redirect error';
+    return null;
+  }
+
+} // getRedirectedAlbumPage()
+
+
 async function parsePage(url){
 
-  const urlEnc = encodeURIComponent(url);
-  
+  let urlEnc = encodeURIComponent(url);
+
   let data = null;
 
   try {
-    data = await (await fetch(cors + urlEnc)).text();
-    // console.log( 'got', url, data );
+    data = await (await fetch(CORS_PROXY_URL + urlEnc)).text();
   } catch (error) {
-    console.log( `Bad URL?`, url );
+    console.log( `Bad URL?`, CORS_PROXY_URL + url );
     return null;    
   }
 
-  
   // console.log( `html`, data );
 
   // console.time('DOM parse')
@@ -428,9 +602,7 @@ async function parsePage(url){
 
   let recs, tagsText, artistName;
   const pageBlob = pageDom.querySelector('script[data-pagedata-blob]');
-
-  // WHY?! Why are pages either "blobs + no HTML" or "no blobs + HTML" ????
-  // What am I missing?
+  // WHY?! Why are pages either "blobs + no HTML" or "no blobs + HTML" ???? What am I missing?
   if( pageBlob ){
 
     console.log( `Page: JSON BLOB mode` );
@@ -441,9 +613,8 @@ async function parsePage(url){
     const recData = pageMeta.recommendations_footer.album_recs;
     // console.log(`art`, recData);
     
-    const getArtUrl = (id, size = '5') => `https://f4.bcbits.com/img/a${id.toString().padStart(10, '0')}_${size}.jpg`; // '_1.jpg' gives large size! 5 is good too, not too big; 6 is smallest thumbnail
-    
-    console.log(`recs BLOB`, pageMeta.recommendations_footer.album_recs[0] );
+   
+    // console.log(`recs BLOB`, pageMeta.recommendations_footer.album_recs[0] );
 
     recs = pageMeta.recommendations_footer.album_recs.map(r => ({
       audio: r.audio_url,
@@ -454,7 +625,6 @@ async function parsePage(url){
       albumId: r.album_id,
       artist: r.band_name,
     }));
-
     console.assert(recs.some(r => r !== null), 'recs parse FAILED');
 
 
@@ -475,6 +645,7 @@ async function parsePage(url){
 
 
     const recsNodes = pageDom.querySelectorAll('li.recommended-album');
+    
     recs = [...recsNodes].map( r => ({
       audio: r.dataset.audiourl.split('mp3-128":')[1].split('"')[1],
       album: r.dataset.albumtitle,
@@ -500,10 +671,9 @@ async function parsePage(url){
   // Album track info
   const album = pageDom.querySelector('script[data-tralbum]');
   const albumData = JSON.parse(album.dataset.tralbum);
-  // console.log(`albuminfo`, albumData);
 
   const albumTracks = albumData.trackinfo
-    .filter( t => t.file !== null )
+    .filter( t => t.file ) // Skip any tracks without 'file' key (i.e. audio src) defined
     .map( t => ({
       audio: t.file['mp3-128'], 
       title: t.title, 
@@ -514,9 +684,15 @@ async function parsePage(url){
 
 
 // console.timeEnd('DOM parse');
-console.log('OBJ', { artistName, tagsText, recs, albumTracks } );
+console.log('parsePage() loaded artist object', { artistName, tagsText, recs, albumTracks } );
 
-return { artistName, tagsText, recs, albumTracks };  
+  // <meta property="og:image" content="https://f4.bcbits.com/img/a0431503262_5.jpg"></meta>
+
+  const mainImg = pageDom.head.querySelector('meta[property="og:image"');
+  // console.log( `IMAGE`, mainImg, mainImg.content );
+  const imageUrl = mainImg.content;
+
+return { artistName, tagsText, recs, albumTracks, imageUrl };  
 
 } // parsePage()
 
@@ -605,7 +781,7 @@ function recPlayerTemplate(match, level) {
       <a href="${match.albumUrl}" target="_blank" title="(Use context menu to open album page in new tab)">
         <img class="album-image" src="${match.img}" title="">
       </a>
-      <span class="artist">${trunc(match.artist)}</span>
+      <span class="artist">${trunc(match.artist, 40)}</span>
     </div>
 
     <div class="follow">
@@ -646,6 +822,10 @@ function initHandlers() {
     console.log( `CLICK`, target.className );
     // alert(target.className)
 
+    if( (target.className === '' || target.className === 'players') && $('#menu').classList.contains('open')){
+      $('#menu').classList.remove('open');
+    }
+
     // TODO: these don't need to be in the delegated click handler
     // Pause toggle for band/song name/album art in header
     // if( target.className === 'controls' ){
@@ -653,9 +833,9 @@ function initHandlers() {
     // }
 
     // , 'header-album-image'
-    if (['artist-name', 'song-title'].includes(target.className) ){
-      return playToggle(); // no arg to just pause/play
-    }
+    // if (['artist-name', 'song-title'].includes(target.className) ){
+    //   return playToggle(); // no arg to just pause/play
+    // }
 
     // end remove-TODO
 
@@ -663,10 +843,11 @@ function initHandlers() {
 
     // Click thumbnail or band name to toggle play
     if( ['artist', 'thumb', 'album-image'].includes(target.className) ){
+      playingAlbumTrack = null;
       playOrOpen( e, e.target.closest('.playerWrapper') );
-        e.stopPropagation(); // prevent link click (need to use context menu)
-        e.preventDefault();
-        return;
+      e.stopPropagation(); // prevent link click (need to use context menu)
+      e.preventDefault();
+      return;
     }
 
     // // Click thumbnail or band name to toggle play
@@ -686,10 +867,10 @@ function initHandlers() {
         target.innerHTML = '⤴︎';
         target.style.writingMode = 'sideways-lr';
         target.style.color = 'lightblue';
-        console.log(`CLICK`, target, 'children:', childrenNode);
+        // console.log(`CLICK`, target, 'children:', childrenNode);
         childrenNode.classList.add('opened');
 
-        console.log(`LOADED:`, childrenNode.dataset.loaded );
+        // console.log(`LOADED:`, childrenNode.dataset.loaded );
         if (childrenNode.dataset.loaded === 'false') {
           // Only load once
           await loadRecPlayers(childrenNode.dataset.url, childrenNode);
@@ -726,6 +907,20 @@ function initHandlers() {
   });
 
   document.addEventListener('keydown', e => {
+
+    // Search form: cancel other key events except ESC and up/down/enter
+    if(e.target.id === 'searchText'){
+      if( e.code === 'Escape' ){
+        // Hide search results modal
+        $('#searchResults').classList.remove('active');
+      } else if( e.code === 'ArrowDown' ){
+        // alert('next');
+      } else if( e.code === 'ArrowUp' ){
+        // alert('prev');
+      }
+      return;
+    } // search input
+
     console.log(`key`, e.code);
     if (e.code === 'Space') {
       e.preventDefault();
@@ -757,21 +952,37 @@ function initHandlers() {
     } else if (e.code === 'ArrowRight') {
       console.log(`Right`);
       e.preventDefault();
-    } else if (e.code == 'BracketRight') {
+    } else if (e.code === 'BracketRight') {
       userAdvanceTrack();
-    } else if (e.code == 'Period') {
+    } else if (e.code === 'Period') {
       advanceTrack(); // actually to get random order
-    } else if (e.code == 'Slash') {
+    } else if (e.code === 'Slash') {
       // console.log( `Jump 33% current track` );
       currentlyPlayingNode.currentTime += (currentlyPlayingNode.duration / 4.0);
-    } else if (e.code == 'KeyS') {
-      console.log( `SAVE CURRENT!`, currentlyPlayingNode.dataset );
+    } else if (e.code === 'KeyS') {
+      console.log( `SAVE CURRENT!`, currentlyPlayingNode );
       if (currentlyPlayingNode ){
         saveArtist( currentlyPlayingNode.dataset );
       }
 
       e.preventDefault();
+    } else if (e.code === 'KeyF') {
+      // Hide search results modal
+      $('#searchResults').classList.add('active');
+      $('#searchText').focus();
+      e.preventDefault();
+      e.stopPropagation();
+    } else if (e.code === 'KeyM') {
+      $('#menu').classList.add('open');
+    } else if( e.code === 'Escape' ){
+      $('#searchResults').classList.remove('active');
+      $('#menu').classList.remove('open');
+    } else if (e.code === 'KeyP') {
+      previousTrack();
+      e.preventDefault();
+      e.stopPropagation();
     }
+     
   });
 
 
@@ -786,14 +997,64 @@ function initHandlers() {
     event.preventDefault();
     const pasted = (event.clipboardData || window.clipboardData).getData("text");
     if(pasted.startsWith('http') && pasted.includes('bandcamp.com')){
-      window.location = `?url=${pasted}`;
+      // window.location = `?url=${pasted}`;
+      
+      // Almost works; need to:
+      // - reset top title, (image?)
+      // - define as base, not child (get album links) ... or is this an improvement?
+      //    - alnum play doesn't work because no parent!
+      baseElement = null; 
+      loadRecPlayers(pasted, document.querySelector('#players'), songTree[pasted]);
     }
   });
 
   // mainAudioPlayer.addEventListener('play', audioPlayHandler); // not really working?
   // TODO: use updatePlayerUi ??
-  mainAudioPlayer.addEventListener('ended', advanceTrack);
+
+  mainAudioPlayer.addEventListener('ended', trackEnded);
+  
   mainAudioPlayer.addEventListener('pause', audioPauseHandler);
+
+  // window.addEventListener('resize', e => {
+  //   alert('res')
+  //   headerNode.width = window.innerWidth;
+  // });
+
+
+  // from https://signalvnoise.com/posts/2407-device-scale-user-interface-elements-in-ios-mobile-safari
+  function getDeviceScale() {
+    var deviceWidth, landscape = Math.abs(window.orientation) == 90;
+    if (landscape) {
+      // iPhone OS < 3.2 reports a screen height of 396px
+      deviceWidth = Math.max(480, screen.height);
+    } else {
+      deviceWidth = screen.width;
+    }
+    return window.innerWidth / deviceWidth;
+  }
+
+  // mobile only - keep the position:fixed header at constant size when page is zoomed
+  if (navigator.userAgent.includes('Mobi')) {
+    window.addEventListener('gestureend', function (e) {
+      if (e.scale < 1.0) {
+        // User moved fingers closer together
+      } else if (e.scale > 1.0) {
+        // User moved fingers further apart
+      }
+
+      // var ds = getDeviceScale();
+      // $('.device-fixed-height').style.transform = 'scale(1,' + ds + ')';
+      // $('.device-fixed-height').style.transformOrigin = '0 0';
+      // $('.device-fixed-width').style.transform = 'scale(' + ds + ',1)';
+      // $('.device-fixed-width').style.transformorigin = '0 0';
+
+      // headerNode.style.position = 'absolute';
+      // alert($('.players').scrollTop)
+      // headerNode.style.top = '0px';
+
+
+    }, false);
+  }
 
 } // initHandlers()
 
@@ -802,71 +1063,92 @@ function initMobileHandlers(){
 
   // mobile events
 
-  const headerImg = $('#player .image img');
+  const headerDetails = $('#playerDetails');
+  const detailsMgr = new Hammer.Manager(headerDetails);
 
+  // detailsMgr.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
+  detailsMgr.add(new Hammer.Tap({ event: 'singletap' }));
+  detailsMgr.add(new Hammer.Press({ event: 'longpress', time: 1000 }));
 
-  // headerImg.addEventListener('touchstart', e => {
-  //   if(!longPressAlbumArtTimer){
-  //     longPressAlbumArtTimer = setTimeout(()=>{
-  //       // confirm('Save?');  
-  //       alert(1)
-  //     }, 1000);
-  //   }
-  // });
-  // headerImg.addEventListener('touchend', e => {
-  //   if(longPressAlbumArtTimer){
-  //     clearTimeout(longPressAlbumArtTimer);
-  //     longPressAlbumArtTimer = null;
-  //     e.preventDefault();
-  //   }
-  // });
+  detailsMgr.add(new Hammer.Swipe({ event: 'swipe' }));
 
-  // const headerImgEvents = new Hammer(headerImg, {});
-  // headerImgEvents.on('doubletap', function (ev) {
-  //   // console.log(ev);
-  //   alert('double!');
-  // });
-  // headerImgEvents.on('tap', function (ev) {
-  //   // console.log(ev);
-  //   playToggle();
-  // });
+  // detailsMgr.get('doubletap').recognizeWith('singletap');
+  // detailsMgr.get('singletap').requireFailure('doubletap');
 
+  detailsMgr.on('swipeleft', previousTrack );
+  
+  detailsMgr.on('swiperight', advanceTrack );
 
-
-  // We create a manager object, which is the same as Hammer(), but without the preset recognizers. 
-  var mc = new Hammer.Manager(headerImg);
-  // Tap recognizer with minimal 2 taps
-  // (from https://codepen.io/jtangelder/pen/xxYyJQ) via Examples page
-  mc.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
-  // Single tap recognizer
-  mc.add(new Hammer.Tap({ event: 'singletap' }));
-  mc.add(new Hammer.Press({ event: 'longpress', time: 1000 }));
-
-  // mc.add(new Hammer.Swipe({ event: 'swipe' }));
-  // mc.on('swipe', e => alert('swipe down'));
-
-  mc.get('doubletap').recognizeWith('singletap');
-  mc.get('singletap').requireFailure('doubletap');
-
-  mc.on('singletap', e => {
-    playToggle(); // Causes slight delay before single tap recognised (due to double check)
-  });
-
-  mc.on('doubletap', e => {
-    if (confirm('Save artist?')) {
-      saveArtist(currentlyPlayingNode.dataset);
+  detailsMgr.on('swipedown', e => {
+    if( !mainAudioPlayer.paused ) {
+      mainAudioPlayer.currentTime += (mainAudioPlayer.duration / 3.0);
     }
   });
 
-  // const windowReference = window.open();
-  mc.on('longpress', e => {
+  detailsMgr.on('swipeup', e => alert('det up'));
+
+  detailsMgr.on('singletap', e => {
+    playToggle();
+  });
+  
+  // detailsMgr.on('doubletap', e => {
+  // });
+
+  detailsMgr.on('longpress', e => {
+    currentlyPlayingNode?.scrollIntoView();
+  });
+
+  // Header details text mobile events
+
+  
+  const headerImg = $('#player .image img');
+  const mc = new Hammer.Manager(headerImg);
+  // We create a manager object, which is the same as Hammer(), but without the preset recognizers. 
+  // Tap recognizer with minimal 2 taps (from https://codepen.io/jtangelder/pen/xxYyJQ) via Examples page
+  // mc.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
+  mc.add(new Hammer.Tap({ event: 'singletap' }));
+  mc.add(new Hammer.Press({ event: 'longpress', time: 1000 }));
+  mc.add(new Hammer.Swipe({ event: 'swipe' }));
+
+  mc.on('swipeleft', e => {
+    alert('img left')
+    // window.open(currentlyPlayingNode.dataset.url, '_blank');
+  });
+
+  mc.on('swipedown', openMenu );
+  mc.on('swipeup',   showSearchPanel );
+
+  mc.on('swiperight', e => {
+    alert('img right');
+  } );
+
+  // mc.get('doubletap').recognizeWith('singletap');
+  // mc.get('singletap').requireFailure('doubletap');
+
+  mc.on('singletap', e => {
+    if( $('#menu').classList.contains('open') ){
+      $('#menu').classList.remove('open');
+      return;
+    }
+    playToggle(); // Causes slight delay before single tap recognised (due to double check)
+  });
+
+  // mc.on('doubletap', e => {
+  //   if (confirm('Save artist?')) {
+  //     saveArtist(currentlyPlayingNode.dataset);
+  //   }
+  // });
+
+
+  mc.on('longpress', e => { 
     // if(confirm('Visit band page?')){
     // if( currentlyPlayingNode ){
     // window.open(currentlyPlayingNode.dataset.url, '_blank');
     // windowReference.location = currentlyPlayingNode.dataset.url;
     // }
-    // openMenu();
-    e.preventDefault();
+    if (confirm('Save artist?')) {
+      saveArtist(currentlyPlayingNode.dataset);
+    }
   });
 
 
@@ -883,7 +1165,10 @@ function initMobileHandlers(){
   // nextBtnManager.get('doubletap').recognizeWith('singletap');
   // nextBtnManager.get('singletap').requireFailure('doubletap');
 
-  nextBtnManager.on('singletap', () => advanceTrack());
+  nextBtnManager.on('singletap', () => {
+    playingAlbumTrack = null; // switch off album sequence mode
+    advanceTrack()
+  });
 
   nextBtnManager.on('longpress', e => {
     controls.randomAdvance = !controls.randomAdvance;
@@ -892,16 +1177,17 @@ function initMobileHandlers(){
   });
 
 
-  $('#player .artist-name').addEventListener('touchstart', (e) => {
-    playToggle();
-    e.preventDefault();
-  });
+  // Pre-Hammer handling
+  // $('#player .artist-name').addEventListener('touchstart', (e) => {
+  //   playToggle();
+  //   e.preventDefault();
+  // });
 
-  // We only know the name of the track for album tracks, not recs
-  $('#player .song-title').addEventListener('touchstart', (e) => {
-    playToggle();
-    e.preventDefault();
-  });
+  // // We only know the name of the track for album tracks, not recs
+  // $('#player .song-title').addEventListener('touchstart', (e) => {
+  //   playToggle();
+  //   e.preventDefault();
+  // });
 
   // $('#player .image img').addEventListener('touchstart', playToggle);
   // $('#player .controls').addEventListener('touchstart', advanceTrack);
@@ -1080,3 +1366,127 @@ function saveArtist( obj ) {
 } // saveBand()
 
 init();
+
+
+function showSearchPanel(){
+  $('#searchResults').classList.add('active');
+  $('#searchText').focus();
+} // showSearchPanel()
+
+async function search(text){
+  const params = {
+    method: "post",
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      search_text: text || "floatie", 
+      search_filter: "b", // band (a=artist, t=track)
+      full_page: false, 
+      // max_results: 10  // is there a limit param?
+    })
+  };
+  const json = await fetch(CORS_PROXY_URL + 'https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic', params);
+  const res = await json.json();
+  // console.log( `res`, res.auto.results.map(r => `${r.name} :: ${r.location}`) );
+  // console.log( res );
+  renderSearchResults( res.auto.results );
+} // search()
+
+
+function renderSearchResults( items ){
+  console.log( `renderSearchResults():`, items );
+  const container = $('#searchResults .results');
+  container.replaceChildren('');
+  
+  const resultsParent = $('#searchResults');
+  resultsParent.classList.add('active');
+  // $('#searchResults').classList.add('active');
+
+  if( items.length === 0 ){
+    console.log( container );
+    container.innnerHTML = `<span>No results yet. Keep trying...</span>`;
+    return;
+  }
+
+  console.log( `search items:`, items.length );
+
+  const nodes = items.slice(0, 10).map( item => {
+    const node = document.createElement('div');
+    node.className = 'result';
+    node.dataset.url = item.item_url_root;
+    // TODO: also check 'item_url_path' for albums
+
+    // TODO: use getArtUrl if you can work out img_id/art_id issues
+    const tags = item.tag_names && item.tag_names.length > 0 ?
+      trunc(item.tag_names.join(', '), 70)
+      : '';
+    node.innerHTML = `
+      <div class="image"><img src="${item.img}" alt="${item.name}"></div>
+      <div class="details">
+        <div class="title"> ${item.name}</div>
+        <div class="location">${item.location}</span>
+        <div class="result-tags">${trunc(tags, 40)}</div>
+      </div>
+    `;
+    // item_url_root, tag_names['']
+    return node;
+  });
+  container.append(...nodes);
+} // renderSearchResults()
+
+$('#searchText').addEventListener('input', e => {
+  const query = e.target.value;
+  if( query.length > 2 ){
+    search(query);  
+  }
+});
+
+
+
+$('#closeSearchResults').addEventListener('click', e => {
+  $('#searchResults').classList.remove('active');
+  e.stopPropagation();
+});
+
+$('#searchResults .results').addEventListener('click', e => {
+  const url = e.target.closest('.result').dataset.url;
+  $('#searchResults').classList.remove('active');
+  loadSearchResult(url);
+  e.stopPropagation();
+});
+
+
+// $('#searchButton').addEventListener('click', e => {
+//   $('#searchResults').classList.add('active');
+//   $('#searchText').focus();
+// });
+
+async function loadSearchResult(url){
+
+  $('#players').innerHTML = '<div class="loading">Loading...</div>';
+  $('#player .song-title').innerHTML = 'Loading...';
+  $('#player .artist-name').innerHTML = 'Loading...';
+  $('#player .image img').src = 'https://placekitten.com/80/80';
+
+
+  const urlParts = new URL(url);
+  // console.log( 'host:', urlParts.hostname );
+  // console.log( 'path:', urlParts.pathname );
+  if (urlParts.pathname === '/') {
+    // search results URLs require a redirect (cors proxy can't handle it)
+    url = await getRedirectedAlbumPage(encodeURIComponent(url));
+  } 
+  baseElement = null; // full tree reload
+  loadRecPlayers(url, document.querySelector('#players'), songTree[url]); 
+} // loadSearchResult()
+
+// Search testing:
+// $('#searchResults').classList.add('active');
+// const _searchInput = $('#searchText');
+// _searchInput.selectionStart = _searchInput.selectionEnd = _searchInput.value.length;
+// _searchInput.focus();
+// 
+// localStorage.removeItem("https://floatiehq.bandcamp.com");
+// alert(localStorage.getItem("https://floatiehq.bandcamp.com/"))
