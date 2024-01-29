@@ -62,6 +62,8 @@ const CORS_PROXY_URL = 'https://corsproxy.io/?';
   const REDIRECT_PROXY_URL = 'https://us-central1-functions-test-24b29.cloudfunctions.net/getRedirect?k=allo&url=';
 // } // mobile-only
 
+const RECENTLY_PLAYED_DAYS = 7; // 1 week
+const RECENTLY_PLAYED_THRESHOLD_MS = (1000 * 60 * 60) * 24 * RECENTLY_PLAYED_DAYS;  
 
 // helpers
 // Object.prototype.l = function (x) {console.log('log:', this); return this; };
@@ -77,6 +79,9 @@ let playingAlbumTrack = null;  // !== null means it's album play mode
 
 let savedArtists = loadSavedArtists();
 // console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
+let recentlyPlayed = loadRecentlyPlayed();
+// console.log("🚀 ~ LS recentlyPlayed:", recentlyPlayed)
+
 
 const songTree = { [startUrl]: { children: {}, status: null } };
 let currentSongTreeNode = songTree[startUrl];
@@ -86,7 +91,7 @@ let controlsGui = null;
 
 const controls = {
   randomAdvance: true,
-  randomExpandNewProb: 0.5,
+  randomExpandNewProb: 0.5 // overrided when no non-recently-played tracks available
 };
 
 
@@ -170,8 +175,8 @@ function trackEnded(){
   // Track reached a natural end - add to recently played list
   // TODO: what about when you skip a track? Shouldn't this also add
   // TODO    to recently-played?
-  advanceTrack();
-  console.log(`track end:`, Date.now() );
+  advanceTrack( {status: 'ended'} );
+  // console.log(`track end:`, Date.now() );
 } // trackEnded()
 
 
@@ -189,12 +194,40 @@ function previousTrack(){
 
 } // previousTrack()
 
-function advanceTrack(randomOrder=false){
+
+function getTrackIdFromDataset(dataset){
+  // Work out the trackId either from the DOM node dataset directly
+  // or from either of the audio src URL formats used by Bandcamp
+  let trackId = null;
+  if (dataset && 'trackId' in dataset) {
+      trackId = dataset.trackId;
+    } else {
+      // console.log(`curr`, dataset);
+      // TODO: always get trackID in parsePage() when possible?
+      const url = dataset.audioSrc;
+      if (url.includes('stream_redirect')) {
+        trackId = url.split('track_id=')[1].split('&')[0];
+      } else {
+        trackId = url.split('mp3-128/')[1].split('?')[0];
+      }
+    }
+  return trackId;
+} // getTrackIdFromDatasetOrUrl()
+
+
+function advanceTrack(status, randomOrder=false){
+  //  - 'status' for working out how the track ended (for recent check etc)
   // actually 'ended' event handler
   console.log( `%cadvanceTrack()`, 'color: orange; font-weight: bold' );
 
-  const players = $$('.playerWrapper');
+  // Add to recently-played
+  // TODO: distinguish between skipped, ended-naturally, others?
+  const trackId = getTrackIdFromDataset( currentlyPlayingNode.dataset );
+  addSaveRecentlyPlayed( recentlyPlayed, trackId, currentlyPlayingNode.dataset, {status} );
 
+  const players = $$('.playerWrapper'); //[data-recently-played="false"]
+
+  // Play nex album track if in album-playing mode
   if( playingAlbumTrack !== null ){
     // inc track
     // playingAlbumTrack.currentIndex = ();
@@ -205,6 +238,7 @@ function advanceTrack(randomOrder=false){
     return;
   }
   
+  // Random mode: either from current songs, or expanding new node
   if( controls.randomAdvance || randomOrder ){
 
     if( Math.random() < controls.randomExpandNewProb ){
@@ -212,10 +246,31 @@ function advanceTrack(randomOrder=false){
     } else {
 
       // Normal random
-      let randomPlayer = { audioSrc: mainAudioPlayer.src }; // guarantee 1 try below
-      while( randomPlayer.audioSrc === mainAudioPlayer.src ){
-        randomPlayer = players[Math.floor(players.length * Math.random())];
+      // let randomPlayer = { audioSrc: mainAudioPlayer.src }; // guarantee 1 try below
+      // while( randomPlayer.audioSrc === mainAudioPlayer.src ){
+      //   randomPlayer = players[Math.floor(players.length * Math.random())];
+      // }
+
+      let randomPlayer = null;
+      let isRecentlyPlayed = true; // guarantee 1 try below
+      let triesCount = 0;
+      while( isRecentlyPlayed && triesCount < players.length ){
+        randomPlayer = players[Math.floor(Math.random() * players.length)];
+        const trackId = getTrackIdFromDataset(randomPlayer.dataset);
+        console.log( `Rand player:`, randomPlayer.dataset.artist, trackId );
+        isRecentlyPlayed = wasRecentlyPlayed( trackId );
+        triesCount++;
+        console.log(`tries`, triesCount, '/', players.length);
       }
+
+      if (triesCount >= players.length) {
+        // alert('Nothing left to play! (standard rand)'); // Do expansion here
+        quickNastyRandomExpand();
+        return;
+      }
+      
+      console.log(`Rand selected:`,  randomPlayer.dataset.artist, randomPlayer.dataset);
+      
       // randomPlayer.play();
       lastPlayingNode = currentlyPlayingNode;
       currentlyPlayingNode = randomPlayer;
@@ -255,7 +310,10 @@ function advanceTrack(randomOrder=false){
   }
 } // advanceTrack()
 
+
+
 async function quickNastyRandomExpand(){
+  console.log( `quickNastyRandomExpand()` );
 
   const unopened = $$('.opener[data-loaded="false"]');
   const randy = unopened[Math.floor(Math.random() * unopened.length)]
@@ -266,7 +324,26 @@ async function quickNastyRandomExpand(){
   await waitForElementToExistAt('.playerWrapper', childRecs);
 
   const players = childRecs.querySelectorAll('.playerWrapper');
-  const randPlayer = players[Math.floor(Math.random() * players.length)];
+  
+  // let randPlayer = { audioSrc: mainAudioPlayer.src }; // guarantee 1 try below
+
+  let randPlayer = null;
+  let isRecentlyPlayed = true; // guarantee 1 try below
+  let triesCount = 0;
+  while( isRecentlyPlayed && triesCount < players.length ){
+    randPlayer = players[ Math.floor(Math.random() * players.length) ];
+    isRecentlyPlayed = wasRecentlyPlayed( getTrackIdFromDataset(randPlayer.dataset) );
+    triesCount++;
+    console.log( `tries`, triesCount, '/', players.length );
+  }
+
+  if (triesCount >= players.length ){
+    alert('Expand new: Nothing left to play!'); // Do expansion here
+    quickNastyRandomExpand(); // try again i guess!
+    return;
+  }
+
+
   lastPlayingNode = currentlyPlayingNode;
   currentlyPlayingNode = randPlayer;
   loadAudio( randPlayer.dataset );
@@ -275,6 +352,23 @@ async function quickNastyRandomExpand(){
   randPlayer.scrollIntoView({ behavior: "smooth", inline: "nearest" });
 
 }
+
+
+function wasRecentlyPlayed(id){ 
+
+  if( !(id in recentlyPlayed) ){
+    // console.log( `%cwasRecentlyPlayed(): not in list`, 'color:yellow', id );
+    return false
+  }
+
+  const timeDiff = Date.now() - recentlyPlayed[id].lastPlayedTimestamp;
+  const result = (id in recentlyPlayed) && (timeDiff < RECENTLY_PLAYED_THRESHOLD_MS);
+  // console.log( `%cWAS RECENTLY PLAYED:`, 'color:orange', recentlyPlayed[id].artist, timeDiff );
+  // console.log( `%c${result}`, `color: ${ result ? 'red':'green'}` );
+
+  return result;
+} // wasRecentlyPlayed()
+
 
 function userAdvanceTrack(){
 
@@ -430,6 +524,12 @@ async function loadRecPlayers(url, parent) {
       parent.dataset.url = url;
       parent.dataset.nestingLevel = 0;  // or should just be .nesting ?
       parent.dataset.audioSrc = albumTracks[0].audio;
+
+      // For recently-played
+      // { artistId, trackId, albumUrl, lastPlayedTimestamp }
+      parent.dataset.trackId = albumTracks[0].id; 
+      parent.dataset.trackTitke = albumTracks[0].title;
+      
 
       // Make play button have a default to work with on top-level band
       // (first song from album)
@@ -774,6 +874,8 @@ function recPlayerTemplate(match, level) {
   // console.log( `recPlayerTemplate:`, match );
   //   <source src=${match.audio.split('mp3-128&quot;:')[1].split('&quot;')[1]}>
 
+  const recent = wasRecentlyPlayed(getTrackIdFromDataset({ audioSrc: match.audio }));
+  
   return `
   <div class="playerWrapper"
     data-url="${match.albumUrl}" 
@@ -781,6 +883,7 @@ function recPlayerTemplate(match, level) {
     data-image="${match.img}" 
     data-nesting-level="${level}"
     data-audio-src="${ match.audio }"
+    data-recently-played="${ recent }"
   >
   
     <div class="thumb">
@@ -1083,7 +1186,7 @@ function initMobileHandlers(){
 
   detailsMgr.on('swipeleft', previousTrack );
   
-  detailsMgr.on('swiperight', advanceTrack );
+  detailsMgr.on('swiperight', () => advanceTrack() );
 
   detailsMgr.on('swipedown', e => {
     if( !mainAudioPlayer.paused ) {
@@ -1370,6 +1473,40 @@ function saveArtist( obj ) {
   // TODO: re-render
   // savedBands = saved;
 } // saveBand()
+
+function loadRecentlyPlayed(){
+  try {
+    const recent = localStorage.getItem('recentlyPlayed');
+    if (!recent) {
+      return {};
+    }
+    return JSON.parse(recent);
+  } catch (err) {
+    console.warn(`Could not load recently played`, err);
+    return {};
+  }
+} // loadRecentlyPlayed()
+
+function addSaveRecentlyPlayed(recentObj, trackId, dataset, extraFields){
+
+  recentObj[trackId] = {
+    lastPlayedTimestamp: Date.now(),
+    artist: dataset.artist,
+    albumUrl: dataset.albumUrl,
+    audioSrc: dataset.audioSrc,
+    ...extraFields
+  };
+
+  try {
+    localStorage.setItem('recentlyPlayed', JSON.stringify(recentObj));
+    // console.log( `LS SAVE recentlyPlayed`, recentObj);
+  } catch (e) {
+    console.warn('Error saving recentlyPlayed data', recentObj, err);
+  }
+
+} // saveRecentlyPlayed()
+
+
 
 init();
 
