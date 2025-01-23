@@ -1,6 +1,24 @@
 
 /*
 
+  ?nocache=1 to reload all recs from Bandcamp
+
+  Controls reminder:
+
+  Save current playing artist: 'S' key, or long-press on header album image (mobile)
+
+  KEEPS OVERWRITING MY NICE LISTS! PRINT OUT CURRENT LIST TO CONSOLE BEFORE SAVE! (Or back up to other localstorage key before saving... previousSavedArtists )
+
+  ---
+On search:   {"__api_special__":"exception","error_type":"Endpoints::MustBePostError"}
+
+Cors PROXY doesn't seem to forward OPTIONS requested used by fetch(); POSSIBLE: use another library that doesn't do preflight OPTIONS request? Are there any? Is it enforced at browser-level now?
+
+Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remote resource at https://corsproxy.io/?https://bandcamp.com/api/bcsearch_public_api/1/autocomplete_elastic. (Reason: CORS header ‘Access-Control-Allow-Origin’ missing). Status code: 403.
+
+
+
+
   - album play
 
   - random play error on mobile:
@@ -48,6 +66,24 @@
 
 // https://essential-audio-player.net/
 */
+
+// Start of single app object refactor
+const app = {
+  config: {},
+  controls: {},
+  state: {},
+  dom: {},
+  audio: {},
+  gui: {
+    search: {},
+    player: {},
+    init(){
+    },
+
+  },
+  util: {},
+}; // main app
+
 const params = new URLSearchParams(window.location.search);
 const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
 
@@ -55,7 +91,7 @@ const FORCE_RELOAD = params.get('nocache') !== null || false;  // reload ALL
 const APP_VERSION = '0.2.2';  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
 
 // const cors = 'http://localhost:9999/';
-const CORS_PROXY_URL = 'https://corsproxy.io/?';
+const CORS_PROXY_URL = 'https://corsproxy.io/?url=';
 
 // let REDIRECT_PROXY_URL = 'http://127.0.0.1:5001/functions-test-24b29/us-central1/getRedirect?k=allo&url=';
 // if (navigator.userAgent.includes('Mobi')) {
@@ -139,11 +175,11 @@ function trunc(str, len=25){
   return str.length < len ? str : str.substring(0, len) + '…';  
 }
 
-function audioPauseHandler(e){
-  console.log(`audioPauseHandler()`);
-  // e.target.closest('.player').classList.remove('playing');
-  // $('header img').style.display = 'none';
-}
+// function audioPauseHandler(e){
+//   console.log(`audioPauseHandler()`);
+//   // e.target.closest('.player').classList.remove('playing');
+//   // $('header img').style.display = 'none';
+// }
 
  function audioPlayHandler({target}) {
   // TODO: broken
@@ -499,10 +535,14 @@ async function loadRecPlayers(url, parent) {
 
   // if( isBase ){} else {}
 
+  // if( isBase ){
+    // $('#player .artist-name').innerHTML = trunc(artistName, 40);
+  // }
+
   if( false ){  // isBase
     // $('#mainTitle').innerHTML = `<span>${trunc(artistName)}</span>`;
   } else {
-    $('#player .artist-name').innerHTML = trunc(artistName, 40);
+    // $('#player .artist-name').innerHTML = trunc(artistName, 40);
     // nested
 
     $('#player .image > img').src = imageUrl;
@@ -528,13 +568,14 @@ async function loadRecPlayers(url, parent) {
       // For recently-played
       // { artistId, trackId, albumUrl, lastPlayedTimestamp }
       parent.dataset.trackId = albumTracks[0].id; 
-      parent.dataset.trackTitke = albumTracks[0].title;
+      parent.dataset.trackTitle = albumTracks[0].title;
       
 
       // Make play button have a default to work with on top-level band
       // (first song from album)
       mainAudioPlayer.src = albumTracks[0].audio;
       $('#player .song-title').innerHTML = albumTracks[0].title;
+      $('#player .artist-name').innerHTML = trunc(artistName, 40);
       // alert(1)
 
       // To make "save artist" work
@@ -921,7 +962,7 @@ function recPlayerTemplate(match, level) {
 
 function initHandlers() {
 
-  initMobileHandlers();
+  
 
   // Using event delegation so these only need to be attached once on load
   document.addEventListener('click', async e => {
@@ -948,7 +989,13 @@ function initHandlers() {
 
     // end remove-TODO
 
-
+    if( target.className === 'external-album' ){
+      console.log( `ext link!` );
+      window.open(currentlyPlayingNode.dataset.url, '_blank');
+      e.stopPropagation();
+      e.preventDefault();
+      return false;
+    }
 
     // Click thumbnail or band name to toggle play
     if( ['artist', 'thumb', 'album-image'].includes(target.className) ){
@@ -1122,7 +1169,7 @@ function initHandlers() {
 
   mainAudioPlayer.addEventListener('ended', trackEnded);
   
-  mainAudioPlayer.addEventListener('pause', audioPauseHandler);
+  // mainAudioPlayer.addEventListener('pause', audioPauseHandler);
 
   // window.addEventListener('resize', e => {
   //   alert('res')
@@ -1142,28 +1189,30 @@ function initHandlers() {
     return window.innerWidth / deviceWidth;
   }
 
-  // mobile only - keep the position:fixed header at constant size when page is zoomed
-  if (navigator.userAgent.includes('Mobi')) {
-    window.addEventListener('gestureend', function (e) {
-      if (e.scale < 1.0) {
-        // User moved fingers closer together
-      } else if (e.scale > 1.0) {
-        // User moved fingers further apart
-      }
+  // // mobile only - keep the position:fixed header at constant size when page is zoomed
+  // if (navigator.userAgent.includes('Mobi')) {
+  //   window.addEventListener('gestureend', function (e) {
+  //     if (e.scale < 1.0) {
+  //       // User moved fingers closer together
+  //     } else if (e.scale > 1.0) {
+  //       // User moved fingers further apart
+  //     }
 
-      // var ds = getDeviceScale();
-      // $('.device-fixed-height').style.transform = 'scale(1,' + ds + ')';
-      // $('.device-fixed-height').style.transformOrigin = '0 0';
-      // $('.device-fixed-width').style.transform = 'scale(' + ds + ',1)';
-      // $('.device-fixed-width').style.transformorigin = '0 0';
+  //     // var ds = getDeviceScale();
+  //     // $('.device-fixed-height').style.transform = 'scale(1,' + ds + ')';
+  //     // $('.device-fixed-height').style.transformOrigin = '0 0';
+  //     // $('.device-fixed-width').style.transform = 'scale(' + ds + ',1)';
+  //     // $('.device-fixed-width').style.transformorigin = '0 0';
 
-      // headerNode.style.position = 'absolute';
-      // alert($('.players').scrollTop)
-      // headerNode.style.top = '0px';
+  //     // headerNode.style.position = 'absolute';
+  //     // alert($('.players').scrollTop)
+  //     // headerNode.style.top = '0px';
 
 
-    }, false);
-  }
+  //   }, false);
+  // }
+  
+  initMobileHandlers();
 
 } // initHandlers()
 
@@ -1197,6 +1246,7 @@ function initMobileHandlers(){
   detailsMgr.on('swipeup', e => alert('det up'));
 
   detailsMgr.on('singletap', e => {
+    if( e.target.className === 'external-album') return false;
     playToggle();
   });
   
