@@ -30,6 +30,10 @@ Cross-Origin Request Blocked: The Same Origin Policy disallows reading the remot
     - 's'  (while playing) save artist to faves
     - shift + click (on song) open in new tab
 
+    - long press on top-right album art to "save artist"
+    - swipe down on top-right album art to show menu
+    - swipe up on top-right album art to show search
+
 
   TODO:
 
@@ -1149,6 +1153,15 @@ function initHandlers() {
     advanceTrack();                    
   });
 
+  navigator.mediaSession.setActionHandler('previoustrack', function (ev) {
+    //  Note: not received if browser not currently playing (FF MacOS)
+    // console.log(`MEDIA NEXT`, ev);
+    // userAdvanceTrack(); // literal next track: TODO
+    // advanceTrack();
+    // alert('PREV');
+    saveArtist(currentlyPlayingNode.dataset);
+  });
+
   window.addEventListener("paste", (event) => {
     event.preventDefault();
     const pasted = (event.clipboardData || window.clipboardData).getData("text");
@@ -1560,6 +1573,17 @@ function addSaveRecentlyPlayed(recentObj, trackId, dataset, extraFields){
 
 init();
 
+
+function loadRandomSaved(){
+  $('#menu').classList.remove('open');
+  console.log( savedArtists );
+  const artistUrls = Object.values(savedArtists);
+  console.log( artistUrls );
+  const ind = Math.floor(Math.random() * artistUrls.length);
+  const url = artistUrls[ind];
+  console.log( url );
+  window.location = `/?url=${ url }`
+}
 
 function showSearchPanel(){
   $('#searchResults').classList.add('active');

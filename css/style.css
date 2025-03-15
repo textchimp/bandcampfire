@@ -96,6 +96,14 @@ header .playing > span {
 #player .artist-name {
   font-size: 14pt;
 }
+
+#player .external-album {
+  font-size: 14pt;  
+  transform: rotate(-90deg);
+  cursor: pointer;
+  padding-left: 1rem;
+}
+
 #player .song-title {
   font-size: 11pt;
   font-style: italic;
@@ -181,6 +189,10 @@ xxxxaudio {
   margin-bottom: 0.3rem;
   /* border: 1px dashed orange; */
 } 
+
+.playerWrapper[data-recently-played="true"] {
+  opacity: 0.8;
+}
 
 .playerWrapper.playing {
   border: 1px solid lightblue;
@@ -287,35 +299,6 @@ xxxxaudio {
 }
 
 
-
-@media only screen and (max-device-width: 480px) {
-
-  header {
-    padding: 0.4rem;
-    position: absolute;
-    top: 0; left: 0;
-  }
-
-  #player .artist-name {
-    font-weight: 500;
-  }
-  #player .image img{
-
-  }
-
-  footer {
-    /* max-height: 2rem; */
-    height: auto;
-    overflow-y: scroll;
-  }
-
-  .playerWrapper .artist {
-    /* vertical-align: top; */
-    font-size: 1.2rem;
-  }
-
-
-} /* media screen max 480px */
 
 #menu {
   display: none;
@@ -446,3 +429,67 @@ xxxxaudio {
   color: grey;
   cursor: pointer;
 }
+
+/* Phone */
+@media only screen and (max-device-width: 480px) {
+
+  header {
+    padding: 0.4rem;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  #player .artist-name {
+    font-weight: 500;
+  }
+
+  #player .image img {}
+
+  footer {
+    /* max-height: 2rem; */
+    height: auto;
+    overflow-y: scroll;
+  }
+
+  .playerWrapper .artist {
+    /* vertical-align: top; */
+    font-size: 1.2rem;
+  }
+
+
+}
+
+/* media screen max 480px */
+
+/* Car! Android auto tablet: aspect ratio 0.75, width 1024px, css height 1366px*/
+@media only screen and (width: 1024px) and (height: 1366px)  {
+  
+  #player .artist-name {
+    font-size: 1.4rem;
+  }
+
+  #player .song-title {
+    font-size: 1.2rem;  
+  }
+
+  /* audio {
+    width: 10% important;
+  } */
+
+  .albumPlayer {
+    font-size: 1.3rem;
+  }
+
+  .playerWrapper .artist {
+    font-size: 2rem;
+  }
+
+ .playerWrapper .follow .opener {
+    display: inline-block;
+    width: 7vw !important;
+    line-height: 3rem;
+    font-size: 3rem;
+  }
+
+} /* car tablet media rules */
