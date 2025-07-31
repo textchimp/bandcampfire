@@ -16,10 +16,12 @@ header, footer {
   width: 100vw;
   margin: 0;
   z-index: 2 !important;
+  
 }
 
 header {
-  top: 0; left: 0;
+  top: 0; left: 0; 
+  position: fixed;
   height: 6rem;
 }
 
@@ -211,7 +213,7 @@ xxxxaudio {
   padding-top: 7rem;
   padding-bottom: 3rem;
   /* padding-left: 1rem; */
-  overscroll-behavior: none;
+  /* overscroll-behavior: none; */
 }
 
 .playerWrapper > * {
@@ -467,15 +469,25 @@ xxxxaudio {
 
 /* media screen max 480px */
 
-/* Car! Android auto tablet: aspect ratio 0.75, width 1024px, css height 1366px*/
-@media only screen and (min-width: 1000px) and (max-width: 1100px) {
+/* Car! Android auto tablet: aspect ratio 0.75, width 1024px, css height 1366px    ;; min-width: 1000px too high now? */
+@media only screen and (min-width: 700px) and (max-width: 1100px) {
   
-  #player .artist-name {
-    font-size: 2.4rem;
+  header {
+    top: 0; left: 0; position: fixed;
+    height: 6rem;
+    scroll-margin: 0 !important;
+    /* border: 1px solid  red; */
+    
   }
 
-  #player .song-title {
+  #player .artist-name {
+    font-size: 2rem;
+  }
+
+  #player .song-title { 
     font-size: 1.4rem;  
+    /* border: 1px solid  red; */ 
+    
   }
 
   #player .external-album {
@@ -495,7 +507,7 @@ xxxxaudio {
   .playerWrapper{
     /* border: 1px solid  red; */
     width: 99%; /* for swipe action */
-    
+    scroll-margin: 5.5rem;
   }
 
   .playerWrapper .artist {
@@ -536,16 +548,24 @@ xxxxaudio {
   }
 
   audio#mainPlayer {
-    transform: scale(1.6) translateX(5vw);
+    /* transform: scale(1.6) translateX(5vw); */
     filter: invert(100%);
     width: 35vw !important;
     height: 2vh !important;
+    /* clip-path: rect(20px 20px 99% 99%); */
+  }
+
+
+  #menu {
+    right: 3.5rem !important;
+    padding-bottom: 1.5rem;
   }
 
   #menu li {
-    font-size: 2rem;
+    font-size: 1.8rem;
     height: 10vh;
     line-height: 10vh;
+    right: 1rem !important;
   }
 
   .albumPlayer a, .albumPlayer span {
@@ -553,3 +573,8 @@ xxxxaudio {
   }
 
 } /* car tablet media rules */
+
+/*
+Can't scroll (touch drag, anyway) on expanded recs in PS2 ruleset!
+*/
+

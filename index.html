@@ -25,9 +25,13 @@
         <div class="song-title"></div>
       </div>
 
-      <audio id="mainPlayer" controls></audio>
+      <audio id="mainPlayer" controls controlslist="nodownload"></audio>
+
     </div>
-    <div class="controls" data-advance-mode="random">↬</div> <!-- ⇨ ↬ ☈ → -->
+    <div class="controls" data-advance-mode="random">
+    ↬
+    <span>deep</span>
+    </div> <!-- ⇨ ↬ ☈ → -->
     <div class="image">
       <img class="header-album-image" src="http://placekitten.com/50/50">
     </div>
@@ -56,6 +60,12 @@
   <li onclick="currentlyPlayingNode?.scrollIntoView();">
     Show in Tree
   </li>  
+  <!-- <li onclick="">
+    Shallow Play
+  </li>   -->
+  <li onclick="setSaveEndpoint()">
+    Set Remote (?)
+  </li>
 </ul>
 
 </div>

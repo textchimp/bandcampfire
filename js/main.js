@@ -1,7 +1,15 @@
 
 /*
+  - Do a damn extra request to get the actual name of the '(recommended track)' song! Too confusing and hard to mentally pin otherwise
+  - Text search for new band would be really convenient... CORS req method issues
+  - Think we'll need custom play/pause + timecode instead of <audio> for car
+  - Fix top of header (artist name) scrolling out of view in car, CSS
+  - Header icon/btn for "next track in album same artist" (same as clicking on expanded 1/x album details, will need extra req)
 
   ?nocache=1 to reload all recs from Bandcamp
+
+  Ngrok alt public tunnel (pinggy.io, note dev server port of 5501, change as needed): 
+    ssh -p 443 -R0:localhost:5501 a.pinggy.io     
 
   Controls reminder:
 
@@ -230,7 +238,9 @@ function previousTrack(){
   loadAudio(currentlyPlayingNode.dataset);
   $('.playing')?.classList.remove('playing');
   currentlyPlayingNode.classList.add('playing');
-  currentlyPlayingNode.scrollIntoView({ behavior: "smooth", inline: "nearest" });
+  // currentlyPlayingNode.scrollIntoView({ behavior: "smooth", inline: "nearest" });
+
+
 
 } // previousTrack()
 
@@ -423,10 +433,22 @@ function userAdvanceTrack(){
   // players[nextIndex].play();
 }
 
+// Wrappers which also set the mediaSession browser API play state for media key handling
+function play(){  
+  // Doesn't work until audio played by web interaction in Androit Auto Vivaldi, or FF MacOS
+  navigator.mediaSession.playbackState = "playing";
+  mainAudioPlayer.play();
+}
+function pause(){
+  // prompt('How does this look?', 'text'); // looks fine, 'text' appears as default response
+  navigator.mediaSession.playbackState = "paused";
+  mainAudioPlayer.pause();
+}
+
 function playToggle(parent){
 
   if( !parent ){
-    mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
+    mainAudioPlayer.paused ? play() : pause();
     return;
   }
   // console.log( `playToggle`, parent.dataset, mainAudioPlayer );
@@ -434,7 +456,7 @@ function playToggle(parent){
   // Play if paused, or if clicked track is different to playing track
   if( mainAudioPlayer.src == parent.dataset.audioSrc ){ 
     // Unpause if same track
-    mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
+    mainAudioPlayer.paused ? play() : pause();
   } else {
     lastPlayingNode = currentlyPlayingNode;
     currentlyPlayingNode = parent;
@@ -448,7 +470,7 @@ function playToggle(parent){
   //   $('.playing')?.classList.remove('playing');
   //   parent.classList.add('playing');
   // } else {
-  //   mainAudioPlayer.pause();  
+  //   pause();  
   // }
 
 } // playToggle()
@@ -459,12 +481,14 @@ function loadAudio( args ){
   mainAudioPlayer.src = args.audioSrc;
   
   mainAudioPlayer.load();
-  mainAudioPlayer.play();
+  play();
 
   // console.log( `current`, currentlyPlayingNode );
 } // loadAudio()
 
 function updatePlayerUi( args ){
+  
+  // TODO: trunc more depending on device ie font size
   $('#player .artist-name').innerHTML = trunc(args.artist, 40);
   
   // We only know the name of the track for album tracks, not recs
@@ -1086,12 +1110,12 @@ function initHandlers() {
       e.preventDefault();
       
       if( mainAudioPlayer.src ){
-        mainAudioPlayer.paused ? mainAudioPlayer.play() : mainAudioPlayer.pause();
+        mainAudioPlayer.paused ? play() : pause();
       } else {
         // TODO: Choose random to start
       }
 
-      //   mainAudioPlayer.pause();
+      //   pause();
       //   lastPlayingNode = currentlyPlayingNode;
       //   currentlyPlayingNode = null;
       // } else {
@@ -1146,6 +1170,32 @@ function initHandlers() {
   });
 
 
+  function askNotificationPermission() {
+    // Check if the browser supports notifications
+    if (!("Notification" in window)) {
+      console.log("This browser does not support notifications.");
+      return;
+    }
+    Notification.requestPermission().then((permission) => {
+      // set the button to shown or hidden, depending on what the user answers
+      // notificationBtn.style.display = permission === "granted" ? "none" : "block";
+      document.querySelector('.controls span').innerHTML = "granted" ? "YES" : "NO";
+      const notification = new Notification("To do list", { body: 'This is the body of the notification' });
+    });
+  }
+
+  navigator.mediaSession.setActionHandler('play', function (ev) {
+    //  Note: not received if browser not currently playing (FF MacOS)
+    console.log('play', navigator.mediaSession.playbackState)
+    play();
+  });
+
+  navigator.mediaSession.setActionHandler('pause', function (ev) {
+    //  Note: not received if browser not currently playing (FF MacOS)
+    console.log('pause', navigator.mediaSession.playbackState)
+    pause();
+  });
+
   navigator.mediaSession.setActionHandler('nexttrack', function (ev) {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log(`MEDIA NEXT`, ev);
@@ -1159,6 +1209,9 @@ function initHandlers() {
     // userAdvanceTrack(); // literal next track: TODO
     // advanceTrack();
     // alert('PREV');
+    
+    // TODO: use modal since notifications API doesn't work in car Android Auto Vivaldi
+    // askNotificationPermission();
     saveArtist(currentlyPlayingNode.dataset);
   });
 
@@ -1334,6 +1387,9 @@ function initMobileHandlers(){
   // nextBtnManager.add(new Hammer.Tap({ event: 'doubletap', taps: 2 }));
   nextBtnManager.add(new Hammer.Tap({ event: 'singletap' }));
   nextBtnManager.add(new Hammer.Press({ event: 'longpress', time: 1000 }));
+
+  nextBtnManager.add(new Hammer.Swipe({ event: 'swipe' }));
+
   // nextBtnManager.get('doubletap').recognizeWith('singletap');
   // nextBtnManager.get('singletap').requireFailure('doubletap');
 
@@ -1346,6 +1402,21 @@ function initMobileHandlers(){
     controls.randomAdvance = !controls.randomAdvance;
     e.target.dataset.advanceMode = controls.randomAdvance; // need this?
     e.target.innerHTML = controls.randomAdvance ? '↬' : '↦';
+  });
+
+  nextBtnManager.on('swipedown', e => {
+    // controls.randomAdvance = !controls.randomAdvance;
+    // e.target.dataset.advanceMode = controls.randomAdvance; // need this?
+    // e.target.innerHTML = controls.randomAdvance ? '↬' : '↦';
+    document.querySelector('.controls span').innerHTML = 'shal';
+  });
+
+  // Only works for first one - how to assign to ALL
+  const playerWrapperManager = new Hammer.Manager($('.playerWrapper'));
+  playerWrapperManager.add(new Hammer.Swipe({ event: 'swipe' }));
+
+  playerWrapperManager.on('swiperight', e => {
+
   });
 
 
@@ -1674,6 +1745,16 @@ $('#searchResults .results').addEventListener('click', e => {
   e.stopPropagation();
 });
 
+
+function setSaveEndpoint(){
+  const current = localStorage.getItem('saveEndpoint');
+  const disp = current ? ` (current: ${current})` : '';
+  const endp = prompt(`Enter remote URL ${disp}`);
+  if(endp){
+    localStorage.setItem('saveEndpoint', endp);
+  }
+  // alert(endp);
+}
 
 // $('#searchButton').addEventListener('click', e => {
 //   $('#searchResults').classList.add('active');
