@@ -11,15 +11,13 @@ header, footer {
   box-sizing: border-box;
   position: fixed;
   background-color: rgba(20,20,20,1);
-  padding-left: 1rem;
-  padding-right: 1rem;
   width: 100vw;
   margin: 0;
   z-index: 2 !important;
-  
 }
 
 header {
+  padding: 0;
   top: 0; left: 0; 
   position: fixed;
   height: 6rem;
@@ -28,8 +26,8 @@ header {
 footer {
   bottom: 0;
   height: fit-content;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
+  padding: 0.5rem 1rem;
+  /* padding-right: 1rem; padding-top: 0.5rem; padding-bottom: 0.5rem; */
 }
 
 header .playing > span {
@@ -51,7 +49,7 @@ header .playing > span {
 }
 
 
-#player .image {
+#player .image-NOPE {
   /* width: 15vw; */
   height: 100%;
   /* border: 1px solid blue; */
@@ -187,7 +185,8 @@ xxxxaudio {
 .playerWrapper { 
   display: block;
   height: fit-content;
-  width: fit-content;
+  /* width: fit-content; */
+  width: 96%;
   padding-left: 1rem;
   white-space: nowrap;
   min-width: 50vw;
@@ -210,7 +209,7 @@ xxxxaudio {
 
 /* single container for all */
 #players {
-  padding-top: 7rem;
+  padding-top: 13rem;
   padding-bottom: 3rem;
   /* padding-left: 1rem; */
   /* overscroll-behavior: none; */
@@ -225,10 +224,18 @@ xxxxaudio {
 }
 
 .playerWrapper .thumb {
-  /* width: 60px; */
+  width: 90%;
   cursor: pointer;
   padding: 0.4rem;
   /* border: 1px solid red; */
+}
+
+.playerWrapper .thumb .artist {
+  overflow-x: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  /* width: 100%; */
+  right: 0;
 }
 
 .playerWrapper .thumb a{
@@ -290,6 +297,7 @@ xxxxaudio {
 
 .loading {
   padding-left: 1rem;
+  font-size: 1rem;
 }
 
 
@@ -457,6 +465,7 @@ xxxxaudio {
     /* max-height: 2rem; */
     height: auto;
     overflow-y: scroll;
+    /* scroll-margin: 2rem; */
   }
 
   .playerWrapper .artist {
@@ -469,6 +478,11 @@ xxxxaudio {
 
 /* media screen max 480px */
 
+
+/**********************************************************************************************************************/
+/**********************************************************************************************************************/
+/**********************************************************************************************************************/
+
 /* Car! Android auto tablet: aspect ratio 0.75, width 1024px, css height 1366px    ;; min-width: 1000px too high now? */
 @media only screen and (min-width: 700px) and (max-width: 1100px) {
   
@@ -480,24 +494,42 @@ xxxxaudio {
     
   }
 
+  #player {
+    /* border: 1px solid  red;  */
+    min-height: 12vh;
+    height: auto;
+    width: 100vw;
+    background-color: rgba(45, 40, 40, 1);
+    /* padding-left: 0.2rem; */
+    display: flex;
+    gap: 0.2rem;
+    /* padding-right: 0.2rem; */
+  }
+
+    #player .elem {
+      width: 50vw;
+      /* border: 1px solid yellow; */
+      padding-left: 1rem;
+    }
+
   #player .artist-name {
-    font-size: 2rem;
+    font-size: 2.6rem;
   }
 
   #player .song-title { 
-    font-size: 1.4rem;  
+    font-size: 1.7rem;  
     /* border: 1px solid  red; */ 
     
   }
 
   #player .external-album {
-    font-size: 28pt;
-    /* transform: rotate(-90deg); */
+    font-size: 14pt;
     cursor: pointer;
-    padding-left: 2rem;
+    padding-left: 0.1rem;
+    color: grey;
+    top: -1rem;
+    position: relative;
   }
-
-
 
   .albumPlayer {
     font-size: 1.3rem;
@@ -506,8 +538,18 @@ xxxxaudio {
 
   .playerWrapper{
     /* border: 1px solid  red; */
-    width: 99%; /* for swipe action */
+    width: 96%; /* for swipe action - maybe adds horiz scrollbar unnecessarily */ 
     scroll-margin: 5.5rem;
+  }
+
+  .playerWrapper .thumb .artist {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 90%;
+  }
+
+  .playerWrapper .children {
+    padding-right: 0 !important;
   }
 
   .playerWrapper .artist {
@@ -527,21 +569,64 @@ xxxxaudio {
     width: 8vw !important;
   }
 
-  .controls {
+  /* .controls > * {
+    border: 1px solid green;
+  } */
+
+  #player .controls {
     /* border: 1px solid #CCC; */
+    font-size: 10rem;
+    
+    align-self: center; /* vertical?? */
   }
 
-  .controls span{
+  #player .controls span{
+
+    padding-top: 2rem;
+    /* position: relative; bottom: -100x; */
     display: block;
-    height: 2rem;
-    font-size: 1.6rem;
+    height: 8rem;
+    font-size: 3rem;
     font-weight: 400;
-    line-height: 1.5rem;
+    line-height: 0.5rem;
+    /* border: 1px solid red; */
+    
   }
 
-  #player .image img {
-    width: 10vw;
-    height: 10vw;
+  #player .image {
+    margin-left: auto; /* flex right align */
+    /* box-shadow: 0 0 3px 3px rgba(45, 40, 40, 1) inset;  // WARNING: performance issue on mobile?  */
+    background-image: url('https: //f4.bcbits.com/img/a0431503262_5.jpg');
+    background-size: contain;
+    background-repeat: no-repeat; 
+    height: 20vh;
+    width: 20vh;
+    user-select: none;
+    cursor: pointer;
+    position: relative; /* for progress bar bottom align */
+    margin-bottom: 2px;
+  }
+
+    #progress {
+      width: 0%;
+      height: 2px;
+      bottom: 0;
+      position: absolute;
+      display: inline-block;
+      background-color: orange;
+      /* margin: 2px 0.2rem; */
+      margin-bottom: -2px;
+      /* box-shadow: 0 0 3px 3px rgba(45, 40, 40, 1) inset; */
+    }
+
+
+  #player .image img-NOOO {
+  /* https: //stackoverflow.com/a/24953573 */
+    width: auto;
+    height: 100%;
+    min-height: 6rem;
+    min-width: 6rem;
+    max-height: 10rem;
     margin: 0;
     user-select: none;
     /* prevent mobile context menu ...nope! */
@@ -572,7 +657,18 @@ xxxxaudio {
     font-size: 1.6rem;
   }
 
+audio#mainPlayer {
+  display: none;
+}
+
 } /* car tablet media rules */
+
+
+
+
+
+
+
 
 /*
 Can't scroll (touch drag, anyway) on expanded recs in PS2 ruleset!

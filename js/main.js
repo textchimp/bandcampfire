@@ -1,15 +1,21 @@
 
 /*
+  - MediaSession set currently playing details to see in Android Auto home deck? Otherwise how to do? And how to get media controls to appear?
   - Do a damn extra request to get the actual name of the '(recommended track)' song! Too confusing and hard to mentally pin otherwise
   - Text search for new band would be really convenient... CORS req method issues
   - Think we'll need custom play/pause + timecode instead of <audio> for car
   - Fix top of header (artist name) scrolling out of view in car, CSS
   - Header icon/btn for "next track in album same artist" (same as clicking on expanded 1/x album details, will need extra req)
 
-  ?nocache=1 to reload all recs from Bandcamp
+  - Use `?nocache=1` to reload all recs from Bandcamp
 
-  Ngrok alt public tunnel (pinggy.io, note dev server port of 5501, change as needed): 
-    ssh -p 443 -R0:localhost:5501 a.pinggy.io     
+  - Ngrok alt public tunnel (pinggy.io, note dev server port of 5501, change as needed): 
+      `ssh -p 443 -R0:localhost:5501 a.pinggy.io` 
+
+  - See browser settings with `mydevice.io`
+    - PS: 709px width (44em), @media device-width 690px+, @media device-height 900px+, JS height 946px
+
+
 
   Controls reminder:
 
@@ -97,7 +103,11 @@ const app = {
 }; // main app
 
 const params = new URLSearchParams(window.location.search);
-const startUrl = params.get('url') ?? 'https://bmblackmidi.bandcamp.com/album/hellfire';
+const startUrl = params.get('url') ?? 'https://sweepingpromises.bandcamp.com/album/hunger-for-a-way-out';
+
+const IS_CAR = navigator.userAgent.includes('Mac OS'); // .includes('Polestar'); 
+// const IS_TOUCH = (('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0));
+
 
 const FORCE_RELOAD = params.get('nocache') !== null || false;  // reload ALL
 const APP_VERSION = '0.2.2';  // Change this to force reload of cached LocalStorage page data (per cached-band-obj)
@@ -123,7 +133,7 @@ let baseElement = null;
 let currentlyPlayingNode = null;
 let lastPlayingNode = null;
 const playHistory = []; // TODO
-let playingAlbumTrack = null;  // !== null means it's album play mode
+let playingAlbumTrack = null;  // ! null means it's album play mode
 
 let savedArtists = loadSavedArtists();
 // console.log( `saved artists:`, Object.keys(savedArtists).join(', ') );
@@ -143,7 +153,54 @@ const controls = {
 };
 
 
+let lastSecondsElapsed = 0;
+function formatSecondsAsTime(secs, stopIfSame=false) {
+  if(stopIfSame && stopIfSame === lastSecondsElapsed){
+    lastSecondsElapsed = secs;
+    return false;
+  }
+  const hr = Math.floor(secs / 3600);
+  const min = Math.floor((secs - (hr * 3600)) / 60);
+  let sec = Math.floor(secs - (hr * 3600) - (min * 60));
+  // if (min < 10) {
+  //   min = "0" + min;
+  // }
+  if (sec < 10) {
+    sec = "0" + sec;
+  }
+  // return min + ':' + sec;
+  return [min, sec];
+}
+
+
+let progressBar = $('#progress');
+
 let mainAudioPlayer = $('#mainPlayer');
+
+mainAudioPlayer.onloadedmetadata = function () {
+  // // dur = formatSecondsAsTime(mainAudioPlayer.duration);
+  // dur = 
+  // console.log( `duration`, dur );
+};
+
+
+mainAudioPlayer.ontimeupdate = function () {
+  const percentage = mainAudioPlayer.currentTime / mainAudioPlayer.duration * 100;
+  // console.log(`p`, percentage);
+  progressBar.style.width = percentage + '%';
+};
+
+// mainAudioPlayer.ontimeupdate = function () {
+//   const t = formatSecondsAsTime(mainAudioPlayer.currentTime, true);
+//   if( t !== false ){
+//     console.log( t );
+//   }
+//   // const [min, sec] = formatSecondsAsTime(mainAudioPlayer.currentTime);
+//   // if( sec !== lastSecondsElapsed ){
+//   //   console.log( min,sec );
+//   //   lastSecondsElapsed = sec
+//   // }
+// };
 
 const headerNode = $('header');
 
@@ -212,10 +269,12 @@ function trunc(str, len=25){
 
   // target.closest('.player').classList.add('playing');
 
-  const headerImg = $('header img');
+  // Recently commented during img change to background property
+  // const headerImg = $('header img');
+  // headerImg.style.display = 'inline';
+
   // console.log( `playing node:`, currentlyPlayingNode );
   // headerImg.src = currentlyPlayingNode.dataset.image;
-  headerImg.style.display = 'inline';
 } //audioPlayHandler()
 
 
@@ -433,16 +492,29 @@ function userAdvanceTrack(){
   // players[nextIndex].play();
 }
 
+function loadRandomSavedArtistAndPlay(){
+  // Load random from Saved (now without reload, and autoplays)
+  const savedUrls = Object.values(savedArtists);
+  if (savedUrls.length > 0) {
+    // TODO: avoid reloading the same multiple times
+    const randomIndex = Math.floor(Math.random() * savedUrls.length);
+    reInit(savedUrls[randomIndex]);
+  }
+}
+
 // Wrappers which also set the mediaSession browser API play state for media key handling
+let timeElapsedCb = null;
 function play(){  
   // Doesn't work until audio played by web interaction in Androit Auto Vivaldi, or FF MacOS
   navigator.mediaSession.playbackState = "playing";
   mainAudioPlayer.play();
+  progressBar.style.backgroundColor = 'orange';
 }
 function pause(){
   // prompt('How does this look?', 'text'); // looks fine, 'text' appears as default response
   navigator.mediaSession.playbackState = "paused";
   mainAudioPlayer.pause();
+  progressBar.style.backgroundColor = 'white';
 }
 
 function playToggle(parent){
@@ -475,29 +547,37 @@ function playToggle(parent){
 
 } // playToggle()
 
+let dur = null;
+
 function loadAudio( args ){
   // mainAudioPlayer.firstElementChild.src = args.audioSrc;
   updatePlayerUi(args);
   mainAudioPlayer.src = args.audioSrc;
   
+  
+
+ 
   mainAudioPlayer.load();
   play();
 
   // console.log( `current`, currentlyPlayingNode );
 } // loadAudio()
 
-function updatePlayerUi( args ){
-  
+function updatePlayerUi( args ){  // .artist, .title, .image
   // TODO: trunc more depending on device ie font size
-  $('#player .artist-name').innerHTML = trunc(args.artist, 40);
-  
+  $('#player .artist-name .label').innerHTML = trunc(args.artist, 24);
   // We only know the name of the track for album tracks, not recs
-  $('#player .song-title').innerHTML = args.title || '(recommended track)';
-  // $('#player .song-title').innerHTML = args.
-
-  $('#player .image img').src = args.image;
-
+  $('#player .song-title').innerHTML = args.title ? trunc(args.title, 40)  :  '(recommended track)';
+  // $('#player .image img').src = args.image;
+  $('#player .image').style.backgroundImage = `url(${args.image})`;
   document.title = `🔥 ${args.artist}` + (args.title ? ` - '${args.title}' ` : ''); // | BandcampFire
+
+
+  navigator.mediaSession.metadata = new MediaMetadata({
+    ...args, 
+    album: "(todo)",
+    artwork: [ { src: args.image, sizes: "700x700", type: "image/jpg", }, ]
+  });
 
 } // updatePlayerUi()
 
@@ -573,7 +653,8 @@ async function loadRecPlayers(url, parent) {
     // $('#player .artist-name').innerHTML = trunc(artistName, 40);
     // nested
 
-    $('#player .image > img').src = imageUrl;
+    // $('#player .image > img').src = imageUrl;
+    $('#player .image').style.backgroundImage = `url(${imageUrl})`;
 
     // parent.firstElementChild.remove(); // loading message
     parent.replaceChildren('');
@@ -602,8 +683,10 @@ async function loadRecPlayers(url, parent) {
       // Make play button have a default to work with on top-level band
       // (first song from album)
       mainAudioPlayer.src = albumTracks[0].audio;
-      $('#player .song-title').innerHTML = albumTracks[0].title;
-      $('#player .artist-name').innerHTML = trunc(artistName, 40);
+      // $('#player .song-title').innerHTML = albumTracks[0].title;
+      // $('#player .artist-name').innerHTML = trunc(artistName, 40);
+      updatePlayerUi({ artist: artistName, title: albumTracks[0].title, image: imageUrl });
+      console.log(`updatePlayerUi() check`, { artist: artistName, title: albumTracks[0].title, image: imageUrl });
       // alert(1)
 
       // To make "save artist" work
@@ -1143,6 +1226,8 @@ function initHandlers() {
     } else if (e.code === 'Slash') {
       // console.log( `Jump 33% current track` );
       currentlyPlayingNode.currentTime += (currentlyPlayingNode.duration / 4.0);
+    } else if (e.code === 'KeyL') {
+      loadRandomSavedArtistAndPlay();
     } else if (e.code === 'KeyS') {
       console.log( `SAVE CURRENT!`, currentlyPlayingNode );
       if (currentlyPlayingNode ){
@@ -1187,12 +1272,14 @@ function initHandlers() {
   navigator.mediaSession.setActionHandler('play', function (ev) {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log('play', navigator.mediaSession.playbackState)
+    // alert('play')
     play();
   });
 
   navigator.mediaSession.setActionHandler('pause', function (ev) {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log('pause', navigator.mediaSession.playbackState)
+    // alert('pause')
     pause();
   });
 
@@ -1200,8 +1287,13 @@ function initHandlers() {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log(`MEDIA NEXT`, ev);
     // userAdvanceTrack(); // literal next track: TODO
+    pause(); // so it doesn't seem like press was ignored, i.e. something happens while loading next
     advanceTrack();                    
   });
+
+  
+  let doubleClickTimerId = null;
+  let lastPressTimePreviousTrack = 0;
 
   navigator.mediaSession.setActionHandler('previoustrack', function (ev) {
     //  Note: not received if browser not currently playing (FF MacOS)
@@ -1212,8 +1304,29 @@ function initHandlers() {
     
     // TODO: use modal since notifications API doesn't work in car Android Auto Vivaldi
     // askNotificationPermission();
-    saveArtist(currentlyPlayingNode.dataset);
+    
+    // saveArtist(currentlyPlayingNode.dataset);
+    const doubleClickInterval = 500;
+
+    if(  Date.now() - lastPressTimePreviousTrack < doubleClickInterval  ){
+      // alert('double press');
+      clearTimeout(doubleClickTimerId);
+      loadRandomSavedArtistAndPlay();
+    } else {
+      // Always get a single before a double, so how to disambiguate
+      // Set timer for action and cancel only on double-click
+      doubleClickTimerId = setTimeout(()=>{ 
+      // alert('single action');
+        if (currentlyPlayingNode) {
+          saveArtist(currentlyPlayingNode.dataset);
+        }
+      }, doubleClickInterval);
+
+    }
+    lastPressTimePreviousTrack = Date.now()
   });
+
+  
 
   window.addEventListener("paste", (event) => {
     event.preventDefault();
@@ -1236,11 +1349,7 @@ function initHandlers() {
   mainAudioPlayer.addEventListener('ended', trackEnded);
   
   // mainAudioPlayer.addEventListener('pause', audioPauseHandler);
-
-  // window.addEventListener('resize', e => {
-  //   alert('res')
-  //   headerNode.width = window.innerWidth;
-  // });
+  // window.addEventListener('resize', e => { //   headerNode.width = window.innerWidth; // });
 
 
   // from https://signalvnoise.com/posts/2407-device-scale-user-interface-elements-in-ios-mobile-safari
@@ -1326,7 +1435,8 @@ function initMobileHandlers(){
   // Header details text mobile events
 
   
-  const headerImg = $('#player .image img');
+  // const headerImg = $('#player .image img');
+  const headerImg = $('#player .image');
   const mc = new Hammer.Manager(headerImg);
   // We create a manager object, which is the same as Hammer(), but without the preset recognizers. 
   // Tap recognizer with minimal 2 taps (from https://codepen.io/jtangelder/pen/xxYyJQ) via Examples page
@@ -1401,14 +1511,14 @@ function initMobileHandlers(){
   nextBtnManager.on('longpress', e => {
     controls.randomAdvance = !controls.randomAdvance;
     e.target.dataset.advanceMode = controls.randomAdvance; // need this?
-    e.target.innerHTML = controls.randomAdvance ? '↬' : '↦';
+    e.target.innerHTML = controls.randomAdvance ? 'skim' : 'deep';
   });
 
   nextBtnManager.on('swipedown', e => {
     // controls.randomAdvance = !controls.randomAdvance;
     // e.target.dataset.advanceMode = controls.randomAdvance; // need this?
     // e.target.innerHTML = controls.randomAdvance ? '↬' : '↦';
-    document.querySelector('.controls span').innerHTML = 'shal';
+    document.querySelector('.controls span').innerHTML = 'swipedown';
   });
 
   // Only works for first one - how to assign to ALL
@@ -1529,6 +1639,13 @@ function openMenu(){
   $('#menu').classList.toggle('open');  
 } // openMenu()
 
+
+async function reInit(url) {
+  baseElement = null;  // force header to reload contents (name, thumbnail etc)
+  await loadRecPlayers(url, document.querySelector('#players'), songTree[url]);
+  play();
+}
+
 async function init() {
   // if( !loadBodyFromCache(startUrl) ){
     await loadRecPlayers(startUrl, document.querySelector('#players'), songTree[startUrl]);
@@ -1645,6 +1762,7 @@ function addSaveRecentlyPlayed(recentObj, trackId, dataset, extraFields){
 init();
 
 
+// Deprecated in favour of loadRandomSavedArtistAndPlay() which doesn't reload page
 function loadRandomSaved(){
   $('#menu').classList.remove('open');
   console.log( savedArtists );
@@ -1765,8 +1883,8 @@ async function loadSearchResult(url){
 
   $('#players').innerHTML = '<div class="loading">Loading...</div>';
   $('#player .song-title').innerHTML = 'Loading...';
-  $('#player .artist-name').innerHTML = 'Loading...';
-  $('#player .image img').src = 'https://placekitten.com/80/80';
+  $('#player .artist-name .label').innerHTML = 'Loading...';
+  // $('#player .image img').src = 'https://placekitten.com/80/80';
 
 
   const urlParts = new URL(url);
