@@ -1,7 +1,11 @@
 
 /*
+  - -Get rid of alert popup, breaks things-
+  - Log panel visible from menu
+  - Play history, also from menu
+  - -Use next-track media to play if not playing if IS_CAR-
   - MediaSession set currently playing details to see in Android Auto home deck? Otherwise how to do? And how to get media controls to appear?
-  - Do a damn extra request to get the actual name of the '(recommended track)' song! Too confusing and hard to mentally pin otherwise
+  - Do a damn extra request to get the actual name of the '(recommended track)' song! Too confusing and hard to mentally pin otherwise ----- always available in page content? match ID of rec track to album list?
   - Text search for new band would be really convenient... CORS req method issues
   - Think we'll need custom play/pause + timecode instead of <audio> for car
   - Fix top of header (artist name) scrolling out of view in car, CSS
@@ -447,7 +451,7 @@ async function quickNastyRandomExpand(){
   }
 
   if (triesCount >= players.length ){
-    alert('Expand new: Nothing left to play!'); // Do expansion here
+    // alert('Expand new: Nothing left to play!'); // Do expansion here
     quickNastyRandomExpand(); // try again i guess!
     return;
   }
@@ -490,6 +494,19 @@ function userAdvanceTrack(){
   // }
   // console.log(`playing`, playingIndex, nextIndex);
   // players[nextIndex].play();
+}
+
+function showPlayHistory(){
+  const elem = $('#playHistoryPanel > ul');
+  let contents = '';
+  playHistory.forEach(item => {
+    contents += `<li>
+      <div class="artist"><a href="${item.url}" target="_new">${item.artist}:</a></div>
+      <div class="title">${item.title || '(recommended)'}</div>
+    </li>`;
+  });
+  elem.innerHTML = contents;
+  elem.parentNode.classList.add('open');
 }
 
 function loadRandomSavedArtistAndPlay(){
@@ -572,6 +589,7 @@ function updatePlayerUi( args ){  // .artist, .title, .image
   $('#player .image').style.backgroundImage = `url(${args.image})`;
   document.title = `🔥 ${args.artist}` + (args.title ? ` - '${args.title}' ` : ''); // | BandcampFire
 
+  playHistory.push(args);
 
   navigator.mediaSession.metadata = new MediaMetadata({
     ...args, 
@@ -686,7 +704,7 @@ async function loadRecPlayers(url, parent) {
       // $('#player .song-title').innerHTML = albumTracks[0].title;
       // $('#player .artist-name').innerHTML = trunc(artistName, 40);
       updatePlayerUi({ artist: artistName, title: albumTracks[0].title, image: imageUrl });
-      console.log(`updatePlayerUi() check`, { artist: artistName, title: albumTracks[0].title, image: imageUrl });
+      // console.log(`updatePlayerUi() check`, { artist: artistName, title: albumTracks[0].title, image: imageUrl });
       // alert(1)
 
       // To make "save artist" work
@@ -1083,22 +1101,11 @@ function initHandlers() {
     console.log( `CLICK`, target.className );
     // alert(target.className)
 
-    if( (target.className === '' || target.className === 'players') && $('#menu').classList.contains('open')){
+    // TODO: doesn't work very well, need to check classes more carefully or check for not-within-menu click
+    if ((target.className === '' || target.className === 'players' || target.className === 'playerWrapper')){
       $('#menu').classList.remove('open');
+      $('#playHistoryPanel').classList.remove('open');
     }
-
-    // TODO: these don't need to be in the delegated click handler
-    // Pause toggle for band/song name/album art in header
-    // if( target.className === 'controls' ){
-    //   advanceTrack();
-    // }
-
-    // , 'header-album-image'
-    // if (['artist-name', 'song-title'].includes(target.className) ){
-    //   return playToggle(); // no arg to just pause/play
-    // }
-
-    // end remove-TODO
 
     if( target.className === 'external-album' ){
       console.log( `ext link!` );
@@ -1198,23 +1205,6 @@ function initHandlers() {
         // TODO: Choose random to start
       }
 
-      //   pause();
-      //   lastPlayingNode = currentlyPlayingNode;
-      //   currentlyPlayingNode = null;
-      // } else {
-      //   if (lastPlayingNode) {
-      //     lastPlayingNode.play();
-      //     currentlyPlayingNode = lastPlayingNode;
-      //     return;
-      //   }
-      //   // $$('audio')?.play();
-      //   // TODO: play rand on space
-      //   // const players = $$('.playerWrapper');
-      //   // const rand = players[Math.floor(players.length * Math.random())];
-      //   // rand.play();
-      //   // currentlyPlayingNode = rand;
-      // }
-
 
     } else if (e.code === 'ArrowRight') {
       console.log(`Right`);
@@ -1242,10 +1232,17 @@ function initHandlers() {
       e.preventDefault();
       e.stopPropagation();
     } else if (e.code === 'KeyM') {
-      $('#menu').classList.add('open');
+      $('#menu').classList.toggle('open');
+    } else if (e.code === 'KeyH') {
+      if($('#playHistoryPanel').classList.contains('open')){
+        $('#playHistoryPanel').classList.remove('open');
+      } else {
+        showPlayHistory();
+      }
     } else if( e.code === 'Escape' ){
       $('#searchResults').classList.remove('active');
       $('#menu').classList.remove('open');
+      $('#playHistoryPanel').classList.remove('open');
     } else if (e.code === 'KeyP') {
       previousTrack();
       e.preventDefault();
@@ -1287,9 +1284,13 @@ function initHandlers() {
     //  Note: not received if browser not currently playing (FF MacOS)
     console.log(`MEDIA NEXT`, ev);
     // userAdvanceTrack(); // literal next track: TODO
-    pause(); // so it doesn't seem like press was ignored, i.e. something happens while loading next
-    advanceTrack();                    
-  });
+    if ( IS_CAR && mainAudioPlayer.paused ){
+      play(); // use next button as another play (unpause) button, in car
+    } else {
+      pause(); // so it doesn't seem like press was ignored, i.e. something happens while loading next
+      advanceTrack();                    
+    }
+  }); 
 
   
   let doubleClickTimerId = null;

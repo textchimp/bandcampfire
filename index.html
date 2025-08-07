@@ -53,21 +53,29 @@
   <div class="results"></div>
 </div>
 
+<div id="playHistoryPanel">
+  <h3>Play History</h3>
+  <ul></ul>
+</div>
+
 <div id="menu">
 <ul>
-  <li onclick="loadRandomSaved();">
+  <li class="menuItem" onclick="loadRandomSavedArtistAndPlay()">
     Random Saved
   </li>
-  <!-- <li onclick="showSearchPanel();">
+  <!-- <li onclick="showSearchPanel()">
     Search
   </li> -->
-  <li onclick="currentlyPlayingNode?.scrollIntoView();">
+  <li class="menuItem" onclick="currentlyPlayingNode?.scrollIntoView(); this.parentNode.parentNode.classList.remove('open');">
     Show in Tree
+  </li>  
+  <li class="menuItem" onclick="showPlayHistory()">
+    Song History
   </li>  
   <!-- <li onclick="">
     Shallow Play
   </li>   -->
-  <li onclick="setSaveEndpoint()">
+  <li class="menuItem" onclick="setSaveEndpoint()">
     Set Remote (?)
   </li>
 </ul>

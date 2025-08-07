@@ -318,7 +318,7 @@ xxxxaudio {
   /* border: 1px solid red; */
   width: 50vw;
   max-width: 300px;
-  height: 50vh;
+  /* height: 50vh; */
   position: fixed;
   right: 0.1rem;
   top: 6rem;
@@ -443,6 +443,42 @@ xxxxaudio {
   display: inline-block;
   color: grey;
   cursor: pointer;
+}
+
+#playHistoryPanel {
+  display: none;
+  position: fixed;
+  top: 6rem; right: 0;
+  width: 50vw;
+  background-color: rgb(45, 40, 40, 1);
+  z-index: 50;
+  padding: 1rem;
+  overflow-y: scroll;
+}
+
+#playHistoryPanel.open {
+  display: inline-block;
+}
+
+
+#playHistoryPanel ul {
+  padding-left: 1.5rem;
+}
+
+#playHistoryPanel li > div.artist > a {
+  font-weight: 400;
+  color: lightblue;
+  text-decoration: none;
+}
+
+#playHistoryPanel li div.title {
+  font-style: italic;
+}
+
+#playHistoryPanel li {
+  padding-bottom: 0.5rem;
+  font-size: 16pt;
+  list-style-type: decimal;
 }
 
 /* Phone */
@@ -643,7 +679,7 @@ xxxxaudio {
 
   #menu {
     right: 3.5rem !important;
-    padding-bottom: 1.5rem;
+    /* padding-bottom: 1.5rem; */
   }
 
   #menu li {
